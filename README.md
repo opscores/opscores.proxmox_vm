@@ -107,7 +107,7 @@ This role creates VM templates from cloud images. It supports Ubuntu, AlmaLinux,
 
 **Global settings:**
 
-- `vm_storage_pool`: Proxmox storage pool (default: "vmpool")
+- `vm_storage_pool`: Proxmox storage pool (default: "local-lvm")
 - `snippets_path`: Path to Proxmox snippets directory (default: "/var/lib/vz/snippets")
 - `cleanup_downloaded_images`: Whether to remove downloaded images after import (default: false)
 - `recreate_templates`: Whether to recreate existing templates (default: false)

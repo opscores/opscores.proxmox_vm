@@ -23,7 +23,6 @@
       cpu_type: "{{ item.value.cpu_type | default(vm_defaults.cpu_type) }}"
       vm_memory: "{{ item.value.memory | default(vm_defaults.memory) }}"
       vm_cores: "{{ item.value.cores | default(vm_defaults.cores) }}"
-      vm_disk_size: "{{ item.value.disk_size | default(vm_defaults.disk_size) }}"
       vm_network_bridge: "{{ item.value.network_bridge | default(vm_defaults.network_bridge) }}"
       scsihw: "{{ item.value.scsihw | default(vm_defaults.scsihw) }}"
       agent: "{{ item.value.agent | default(vm_defaults.agent) }}"
@@ -62,10 +61,16 @@
   failed_when: ct_storage_active.stdout == ""
   changed_when: false
 
+- name: "Preflight — detect storage type for {{ vm_storage_pool }}"
+  ansible.builtin.shell:
+    cmd: "set -o pipefail; pvesm status | awk -v pool='{{ vm_storage_pool }}' 'NR>1 && $1 == pool {print $2}'"
+  register: ct_storage_type
+  changed_when: false
+
 - name: Set import format based on storage type
   ansible.builtin.set_fact:
     ct_import_disk_format: >-
-      {{ 'raw' if (ct_pve_version.stdout | default('dir')) in ['lvm', 'lvmthin', 'zfspool', 'rbd'] else 'qcow2' }}
+      {{ 'raw' if ct_storage_type.stdout in ['lvm', 'lvmthin', 'zfspool', 'rbd', 'ceph', 'cephfs'] else 'qcow2' }}
 
 - name: Preflight — check free space in {{ vm_storage_pool }}
   ansible.builtin.shell:
@@ -75,7 +80,7 @@
   changed_when: false
 
 # Validate VM IDs are in valid range
-- name: "Validate template IDs for {{ item.name }} are in Proxmox ID range"
+- name: "Validate template IDs are in Proxmox ID range for {{ item.name }}"
   ansible.builtin.assert:
     that:
       - item.vm_id | int >= 100
@@ -102,7 +107,7 @@
 # Check VM existence
 - name: Check if VMs/Templates exist
   ansible.builtin.command:
-    cmd: "test -f /etc/pve/nodes/{{ target_node }}/qemu-server/{{ item.vm_id }}.conf"
+    cmd: "qm status {{ item.vm_id }}"
   register: ct_vm_status
   loop: "{{ ct_active_templates }}"
   changed_when: false
@@ -167,7 +172,7 @@
 
 - name: Verify VMs were created
   ansible.builtin.command:
-    cmd: "test -f /etc/pve/nodes/{{ target_node }}/qemu-server/{{ item.vm_id }}.conf"
+    cmd: "qm status {{ item.vm_id }}"
   register: ct_vm_conf_check
   loop: "{{ ct_active_templates }}"
   when:

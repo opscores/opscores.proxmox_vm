@@ -24,7 +24,11 @@
 # 1. Verify target storage exists and is active
 - name: "Preflight — verify target storage exists and active ({{ storage_pool }})"
   ansible.builtin.shell:
-    cmd: "set -o pipefail; pvesm status | awk -v pool='{{ storage_pool }}' '$1 == pool && $3 == \"active\" {print $0}'"
+    cmd: >-
+      set -o pipefail; pvesm status |
+      awk -v pool='{{ storage_pool }}'
+      'NR==1 {for(i=1;i<=NF;i++) if($i=="Status") st=i}
+      NR>1 && $1==pool && $st=="active" {print $0}'
   register: cv_storage_active
   failed_when: cv_storage_active.stdout == ""
   changed_when: false
@@ -32,7 +36,10 @@
 # 2. Check free space in storage_pool
 - name: "Preflight — check free space in {{ storage_pool }}"
   ansible.builtin.shell:
-    cmd: "set -o pipefail; pvesm status | awk -v pool='{{ storage_pool }}' '$1 == pool {print $6}'"
+    cmd: >-
+      set -o pipefail; pvesm status |
+      awk -v pool='{{ storage_pool }}'
+      '$1 == pool {print $6}'
   register: cv_storage_free
   failed_when: (cv_storage_free.stdout | int / 1048576) | int < storage_min_free_gb
   changed_when: false
@@ -40,7 +47,7 @@
 # 3. Check if VM config exists for {{ new_vm_id }}
 - name: "Check if VM config file exists for ID {{ new_vm_id }}"
   ansible.builtin.command:
-    cmd: "test -f /etc/pve/nodes/{{ target_node }}/qemu-server/{{ new_vm_id }}.conf"
+    cmd: "qm status {{ new_vm_id }}"
   register: cv_vm_config_exists
   changed_when: false
   failed_when: false
@@ -48,7 +55,11 @@
 # 4. Verify local storage has snippets content type (precise check)
 - name: "Verify local storage supports snippets"
   ansible.builtin.shell:
-    cmd: "awk '/^dir: local/ { in_local=1 } /^[^[:blank:]]/ && !/^dir: local/ { in_local=0 } in_local && /content.*snippets/ { found=1 } END { exit (found ? 0 : 1) }' /etc/pve/storage.cfg"
+    cmd: >-
+      awk -v st='{{ snippets_storage }}'
+      '/^[^[:space:]]/ { in_st = ($2 == st) ? 1 : 0 }
+      in_st && /^[[:space:]]/ && /content/ && /snippets/ { found=1 }
+      END { exit (found ? 0 : 1) }' /etc/pve/storage.cfg
   register: cv_snippets_check
   changed_when: false
   failed_when: cv_snippets_check.rc != 0
@@ -151,7 +162,8 @@
   ansible.builtin.command:
     cmd: >-
       qm clone {{ source_vm_id }} {{ new_vm_id }} --name {{ new_vm_name }}
-      --full {{ full_clone | ternary('1', '0') }} --target {{ target_node }}
+      --full {{ full_clone | ternary('1', '0') }}
+      {% if target_node | default('') != '' and target_node != ansible_hostname %}--target {{ target_node }}{% endif %}
       --storage {{ storage_pool }}
   when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
   register: cv_clone_result
@@ -190,7 +202,7 @@
 # ============================================================
 
 # 10a. Get current disk size before resize (if enabled)
-- name: "Get current disk size for {{ new_vm_id }} slot {{ clone_vm_disk_slot }}"
+- name: "Get current disk size for VM disk slot {{ clone_vm_disk_slot }}"
   ansible.builtin.shell:
     cmd: "set -o pipefail; qm config {{ new_vm_id }} | grep -E '{{ clone_vm_disk_slot }}.*size=' | head -1"
   register: cv_current_size_raw

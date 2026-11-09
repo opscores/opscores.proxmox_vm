@@ -217,7 +217,7 @@ final_message: "Debian 12 cloud-init completed at $UPTIME"
 | `new_vm_name` | Hostname новой VM | `"test-vm"` |
 | `os_type` | Тип ОС (должен совпадать с cloud-init шаблоном) | `"ubuntu24"` |
 | `target_node` | Целевой Proxmox узел | `"pve-node"` |
-| `storage_pool` | Хранилище для диска | `"vmpool"` |
+| `storage_pool` | Хранилище для диска | `"local-lvm"` |
 | `full_clone` | Полное клонирование | `true` |
 
 ### Cloud-init параметры (обязательные)
@@ -239,7 +239,7 @@ final_message: "Debian 12 cloud-init completed at $UPTIME"
     new_vm_name: "test-ubuntu24"
     os_type: "ubuntu24"
     target_node: "pve-node"
-    storage_pool: "vmpool"
+    storage_pool: "local-lvm"
     full_clone: true
     cloud_user: "ansible"
     cloud_password: "{{ vault_cloud_password }}"

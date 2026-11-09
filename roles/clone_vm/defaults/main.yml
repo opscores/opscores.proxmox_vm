@@ -2,7 +2,8 @@
 ansible_become: true
 snippets_path: "/var/lib/vz/snippets"
 snippets_storage: "local"
-vm_storage_pool: "vmpool"
+vm_storage_pool: "local-lvm"
+storage_pool: "{{ vm_storage_pool }}"
 storage_min_free_gb: 10
 
 dns_servers: "8.8.8.8 8.8.4.4"
@@ -10,7 +11,7 @@ search_domains: "local"
 
 vm_resize_disk: true
 clone_vm_disk_size: "{{ vm_disk_size | default('12G') }}"
-clone_vm_disk_slot: "{{ vm_disk_slot | default('scsi0') }}"
+clone_vm_disk_slot: "scsi0"  # disk slot to resize (override if template uses another slot)
 
 clone_vm_memory: "{{ vm_memory | default(omit) }}"
 clone_vm_cores: "{{ vm_cores | default(omit) }}"
@@ -33,6 +34,7 @@ cloud_user: ""
 cloud_password: ""
 ssh_public_key: ""
 timezone: "Europe/Moscow"
+target_node: "{{ ansible_hostname }}"
 
 # Cloning required variables (must be set in playbook/inventory)
 # source_vm_id: 3000

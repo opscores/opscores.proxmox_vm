@@ -11,7 +11,7 @@
     new_vm_id: 8002         # New VM ID
     new_vm_name: "static-fedora-vm" # Desired hostname for the new VM
     cloud_user: "ansible"
-    cloud_password: "{{ vault_cloud_password | default('changeme') }}"  # Use ansible-vault
+    cloud_password: "{{ vault_cloud_password }}"  # Use ansible-vault
     ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}" # Path to your public SSH key
 
     # Proxmox environment (values from inventory)
