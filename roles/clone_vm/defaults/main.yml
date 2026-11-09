@@ -10,7 +10,7 @@ dns_servers: "8.8.8.8 8.8.4.4"
 search_domains: "local"
 
 vm_resize_disk: true
-clone_vm_disk_size: "{{ vm_disk_size | default('12G') }}"
+clone_vm_disk_size: ""
 clone_vm_disk_slot: "scsi0"  # disk slot to resize (override if template uses another slot)
 
 clone_vm_memory: "{{ vm_memory | default(omit) }}"

@@ -24,7 +24,6 @@ ansible-galaxy collection install git+https://github.com/username/ansible-collec
     vm_defaults:
       memory: 4096
       cores: 2
-      disk_size: "12G"
       network_bridge: "vmbr0"
     cleanup_downloaded_images: true
   tasks:
@@ -109,7 +108,7 @@ ansible-galaxy collection install git+https://github.com/username/ansible-collec
     # Переопределение параметров ВМ
     clone_vm_memory: 8192      # 8GB RAM
     clone_vm_cores: 4          # 4 CPU cores
-    clone_vm_disk_size: "20G"  # 20GB disk
+    clone_vm_disk_size: "20G"  # optional: resize disk (default = template disk size)
     clone_vm_cpu: "host"       # Использовать CPU хоста
   tasks:
     - name: Clone VM

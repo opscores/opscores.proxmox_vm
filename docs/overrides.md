@@ -38,7 +38,6 @@ os_templates:
 vm_defaults:
   memory: 2048
   cores: 2
-  disk_size: "20G"
   network_bridge: "vmbr1"
 ```
 

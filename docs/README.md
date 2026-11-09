@@ -27,7 +27,6 @@ To create VM templates from cloud images, use the `create-vm-templates.yml` play
     vm_defaults:
       memory: 4096
       cores: 2
-      disk_size: "12G"
       network_bridge: "vmbr0"
     cleanup_downloaded_images: false
   tasks:
@@ -90,7 +89,6 @@ This role creates VM templates from cloud images. It supports Ubuntu, AlmaLinux,
 vm_defaults:
   memory: 1024
   cores: 1
-  disk_size: "12G"
   network_bridge: "vmbr0"
   cpu_type: "host"
   ostype: "l26"
@@ -112,7 +110,7 @@ os_templates:
     enabled: true
     cloud_init_template: ubuntu24
     # Optional per-OS overrides:
-    # memory: 2048, cores: 2, disk_size: "20G", network_bridge: "vmbr1", etc.
+    # memory: 2048, cores: 2, network_bridge: "vmbr1", etc.
     # recreate: true, cleanup_image: true
   ubuntu26:
     template_id: 3004
@@ -169,7 +167,7 @@ The role includes the following checks:
 - `clone_vm_cpu`: CPU type for the cloned VM (overrides default)
 - `clone_vm_scsihw`: SCSI hardware type for the cloned VM (overrides default)
 - `clone_vm_agent`: Guest agent configuration for the cloned VM (overrides default)
-- `clone_vm_disk_size`: Disk size for the cloned VM (overrides default)
+- `clone_vm_disk_size`: Disk size for the cloned VM (empty by default -> keeps template disk size)
 - `clone_vm_disk_slot`: Disk slot to resize (default: scsi0)
 - `vm_resize_disk`: Whether to resize disk when cloning (default: true)
 - `cloud_user`: Username for the cloud-init user

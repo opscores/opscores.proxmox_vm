@@ -23,7 +23,7 @@
     # VM parameters (override template defaults)
     clone_vm_memory: 2048  # VM memory in MB
     clone_vm_cores: 2      # Number of CPU cores
-    clone_vm_disk_size: "12G"  # Disk size
+    # clone_vm_disk_size: "20G"  # optional: resize disk (default = template disk size)
 
     # Network configuration (DHCP default)
     use_dhcp_ip: true  # Use DHCP instead of static IP

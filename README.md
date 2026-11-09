@@ -59,7 +59,6 @@ Sensitive variables (`vault_proxmox_password`, `vault_ansible_user`, `vault_clou
     vm_defaults:
       memory: 4096
       cores: 2
-      disk_size: "12G"
       network_bridge: "vmbr0"
     cleanup_downloaded_images: false
   tasks:
@@ -120,7 +119,6 @@ This role creates VM templates from cloud images. It supports Ubuntu, AlmaLinux,
 vm_defaults:
   memory: 1024
   cores: 1
-  disk_size: "12G"
   network_bridge: "vmbr0"
   cpu_type: "host"
   ostype: "l26"
@@ -179,7 +177,7 @@ The role includes the following checks:
 - `clone_vm_cpu`: CPU type for the cloned VM (overrides default)
 - `clone_vm_scsihw`: SCSI hardware type for the cloned VM (overrides default)
 - `clone_vm_agent`: Guest agent configuration for the cloned VM (overrides default)
-- `clone_vm_disk_size`: Disk size for the cloned VM (overrides default)
+- `clone_vm_disk_size`: Disk size for the cloned VM (empty by default -> keeps template disk size)
 - `clone_vm_disk_slot`: Disk slot to resize (default: scsi0)
 - `vm_resize_disk`: Whether to resize disk when cloning (default: true)
 - `cloud_user`: Username for the cloud-init user

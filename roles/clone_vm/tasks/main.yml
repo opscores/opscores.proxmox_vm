@@ -64,6 +64,25 @@
   changed_when: false
   failed_when: cv_snippets_check.rc != 0
 
+# 5a. Determine whether disk resize is requested
+- name: "Determine if disk resize is requested for {{ clone_vm_disk_slot }}"
+  ansible.builtin.set_fact:
+    cv_should_resize_disk: >-
+      {{ (vm_resize_disk | bool) and (clone_vm_disk_size | string | trim) | length > 0 }}
+  changed_when: false
+
+# 5b. Compute expected disk size in MB (for unit-safe verification)
+- name: "Compute expected disk size in MB for verification"
+  ansible.builtin.set_fact:
+    cv_expected_disk_size_mb: >-
+      {% set s = (clone_vm_disk_size | string) | trim %}
+      {% if s[-1] | upper == 'G' %}{{ (s[:-1] | int) * 1024 }}
+      {% elif s[-1] | upper == 'M' %}{{ s[:-1] | int }}
+      {% elif s[-1] | upper == 'T' %}{{ (s[:-1] | int) * 1048576 }}
+      {% else %}{{ s | int }}{% endif %}
+  changed_when: false
+  when: cv_should_resize_disk
+
 # 5. Validate required variables for clone_vm
 - name: "Validate required variables are defined"
   ansible.builtin.assert:
@@ -207,7 +226,7 @@
     cmd: "set -o pipefail; qm config {{ new_vm_id }} | grep -E '{{ clone_vm_disk_slot }}.*size=' | head -1"
   register: cv_current_size_raw
   changed_when: false
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and vm_resize_disk | bool
+  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and cv_should_resize_disk
 
 - name: "Validate new disk size is larger than current for {{ clone_vm_disk_slot }}"
   ansible.builtin.shell:
@@ -220,12 +239,12 @@
       NEW_VAL="${NEW%[GgMm]}"; NEW_UNIT="${NEW: -1}" && \
       if [ "$CUR_UNIT" = "M" ]; then CUR_MB="$CUR_VAL"; elif [ "$CUR_UNIT" = "G" ]; then CUR_MB=$(( CUR_VAL * 1024 )); else CUR_MB="$CUR_VAL"; fi && \
       if [ "$NEW_UNIT" = "G" ]; then NEW_MB=$(( NEW_VAL * 1024 )); elif [ "$NEW_UNIT" = "M" ]; then NEW_MB="$NEW_VAL"; else NEW_MB="$NEW_VAL"; fi && \
-      if [[ "$NEW_MB" =~ ^[0-9]+$ ]] && (( NEW_MB > CUR_MB )); then echo "OK: ${NEW} > ${CURRENT}"; else exit 1; fi
+      if [[ "$NEW_MB" =~ ^[0-9]+$ ]] && (( NEW_MB >= CUR_MB )); then echo "OK: ${NEW} >= ${CURRENT}"; else exit 1; fi
     executable: /bin/bash
   register: cv_disk_validation
   changed_when: false
   failed_when: false
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and vm_resize_disk | bool
+  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and cv_should_resize_disk
 
 - name: "Fail if new disk size is not larger than current"
   ansible.builtin.fail:
@@ -233,6 +252,7 @@
       Disk resize would shrink {{ clone_vm_disk_slot }} from {{ cv_current_size_raw.stdout }} to {{ clone_vm_disk_size }}.
       Resize only supports expanding disks, not shrinking them.
   when:
+    - cv_should_resize_disk
     - cv_disk_validation is not skipped
     - cv_disk_validation.rc is defined
     - cv_disk_validation.rc != 0
@@ -240,7 +260,7 @@
 - name: "Resize VM disk if enabled"
   ansible.builtin.command:
     cmd: "qm resize {{ new_vm_id }} {{ clone_vm_disk_slot }} {{ clone_vm_disk_size }}"
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and vm_resize_disk | bool
+  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and cv_should_resize_disk
   register: cv_resize_result
   changed_when: "cv_resize_result.stderr | length > 0"
   failed_when: cv_resize_result.rc != 0 and 'no state change' not in cv_resize_result.stderr
@@ -251,17 +271,30 @@
 # 11. Wait for disk resize to complete and verify
 - name: "Wait for disk resize to complete and verify"
   ansible.builtin.shell:
-    cmd: "set -o pipefail; qm config {{ new_vm_id }} | grep -oP '{{ clone_vm_disk_slot }}.*size=\\K[^,]*'"
+    cmd: >-
+      set -o pipefail; qm config {{ new_vm_id }} |
+      grep -oP '{{ clone_vm_disk_slot }}.*size=\K[^,]*' |
+      awk '{ s=$0; u=toupper(substr(s,length(s),1)); v=s; sub(/[A-Za-z]$/,"",v);
+             if (u=="G") print v*1024; else if (u=="M") print v;
+             else if (u=="T") print v*1048576; else print v }'
   register: cv_disk_size_check
   changed_when: false
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and vm_resize_disk | bool and cv_resize_result is succeeded
+  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and cv_should_resize_disk and cv_resize_result is succeeded
   retries: 5
   delay: 5
-  until: cv_disk_size_check.stdout == clone_vm_disk_size
+  until: (cv_disk_size_check.stdout | int) >= (cv_expected_disk_size_mb | int)
 
 # ============================================================
 # Cloud-init
 # ============================================================
+
+# 11a. Report when disk resize was not requested (template size retained)
+- name: "Report disk resize skipped (template size retained)"
+  ansible.builtin.debug:
+    msg: >
+      Disk resize not requested (clone_vm_disk_size empty or vm_resize_disk false).
+      VM keeps the template disk size for {{ clone_vm_disk_slot }}.
+  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and not cv_should_resize_disk
 
 # 12. Validate cloud-init template exists for os_type
 - name: "Fail if cloud-init template not found"
