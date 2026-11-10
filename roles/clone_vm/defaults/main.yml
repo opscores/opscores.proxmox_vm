@@ -44,6 +44,11 @@ ssh_public_key: ""
 timezone: "Europe/Moscow"
 target_node: "{{ ansible_hostname }}"
 
+# Optional: wait for cloud-init to finish after VM start (requires qemu-guest-agent in the image)
+wait_for_cloud_init: false
+wait_for_cloud_init_retries: 60
+wait_for_cloud_init_delay: 5
+
 # Cloning required variables (must be set in playbook/inventory)
 # source_vm_id: 3000
 # new_vm_id: 8001
