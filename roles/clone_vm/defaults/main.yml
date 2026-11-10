@@ -31,6 +31,9 @@ clone_vm_agent: "{{ vm_agent | default('enabled=1') }}"
 
 recreate_vm: false
 
+# Optional: update VM config (memory/cores/cpu) on skip instead of doing nothing
+update_vm_config: false
+
 use_dhcp_ip: true
 static_ip_address: ""
 static_ip_addresses: []   # per-VM static IPs for bulk clone (takes priority over static_ip_address when non-empty)

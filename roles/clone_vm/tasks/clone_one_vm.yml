@@ -75,6 +75,92 @@
   failed_when: false
   when: cv_vm_config_exists.rc == 0 and recreate_vm | bool
 
+# ============================================================
+# Optional: update VM config on skip (update_vm_config=true)
+# ============================================================
+# When VM exists, name matches, and recreate=false, the clone is skipped.
+# If update_vm_config=true, reconcile memory/cores/cpu with desired values.
+- name: "Get current VM memory (for config update)"
+  ansible.builtin.shell:
+    cmd: "set -o pipefail; qm config {{ new_vm_id }} | awk '/^memory:/{print $2}'"
+  register: cv_cur_mem
+  changed_when: false
+  failed_when: false
+  when:
+    - cv_vm_config_exists.rc == 0
+    - not (recreate_vm | bool)
+    - (update_vm_config | default(false) | bool)
+    - clone_vm_memory is defined
+    - clone_vm_memory != omit
+
+- name: "Update VM memory if changed"
+  ansible.builtin.command:
+    cmd: "qm set {{ new_vm_id }} --memory {{ clone_vm_memory }}"
+  when:
+    - cv_vm_config_exists.rc == 0
+    - not (recreate_vm | bool)
+    - (update_vm_config | default(false) | bool)
+    - clone_vm_memory is defined
+    - clone_vm_memory != omit
+    - (clone_vm_memory | string | trim | length > 0)
+    - (cv_cur_mem.stdout | default('') | trim | int) != (clone_vm_memory | int)
+  changed_when: true
+  failed_when: false
+
+- name: "Get current VM cores (for config update)"
+  ansible.builtin.shell:
+    cmd: "set -o pipefail; qm config {{ new_vm_id }} | awk '/^cores:/{print $2}'"
+  register: cv_cur_cores
+  changed_when: false
+  failed_when: false
+  when:
+    - cv_vm_config_exists.rc == 0
+    - not (recreate_vm | bool)
+    - (update_vm_config | default(false) | bool)
+    - clone_vm_cores is defined
+    - clone_vm_cores != omit
+
+- name: "Update VM cores if changed"
+  ansible.builtin.command:
+    cmd: "qm set {{ new_vm_id }} --cores {{ clone_vm_cores }}"
+  when:
+    - cv_vm_config_exists.rc == 0
+    - not (recreate_vm | bool)
+    - (update_vm_config | default(false) | bool)
+    - clone_vm_cores is defined
+    - clone_vm_cores != omit
+    - (clone_vm_cores | string | trim | length > 0)
+    - (cv_cur_cores.stdout | default('') | trim | int) != (clone_vm_cores | int)
+  changed_when: true
+  failed_when: false
+
+- name: "Get current VM cpu (for config update)"
+  ansible.builtin.shell:
+    cmd: "set -o pipefail; qm config {{ new_vm_id }} | awk '/^cpu:/{print $2}'"
+  register: cv_cur_cpu
+  changed_when: false
+  failed_when: false
+  when:
+    - cv_vm_config_exists.rc == 0
+    - not (recreate_vm | bool)
+    - (update_vm_config | default(false) | bool)
+    - clone_vm_cpu is defined
+    - clone_vm_cpu != omit
+
+- name: "Update VM cpu if changed"
+  ansible.builtin.command:
+    cmd: "qm set {{ new_vm_id }} --cpu {{ clone_vm_cpu }}"
+  when:
+    - cv_vm_config_exists.rc == 0
+    - not (recreate_vm | bool)
+    - (update_vm_config | default(false) | bool)
+    - clone_vm_cpu is defined
+    - clone_vm_cpu != omit
+    - (clone_vm_cpu | string | trim | length > 0)
+    - (cv_cur_cpu.stdout | default('') | trim) != (clone_vm_cpu | string | trim)
+  changed_when: true
+  failed_when: false
+
 # Stop existing VM (only if it is currently running; recreate=true)
 - name: "Stop existing VM if it is running and recreate is true (ID {{ new_vm_id }})"
   ansible.builtin.command:
