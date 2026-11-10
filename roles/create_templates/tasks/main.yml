@@ -120,6 +120,28 @@
     ct_vm_existence: "{{ ct_vm_existence | default({}) | combine({item.item.vm_id: 'exists' if item.rc == 0 else 'not_exists'}) }}"
   loop: "{{ ct_vm_status.results }}"
 
+- name: "Unlock existing VM/template if locked (ID {{ item.vm_id }})"
+  ansible.builtin.command:
+    cmd: "qm unlock {{ item.vm_id }}"
+  loop: "{{ ct_active_templates }}"
+  when:
+    - ct_vm_existence[item.vm_id] == "exists"
+    - item.recreate | bool
+  failed_when: false
+  changed_when: false
+
+# Safety: refuse to recreate an existing VM that is not a template (protects real VMs).
+- name: "Abort recreate if existing VM is not a template (ID {{ item.vm_id }})"
+  ansible.builtin.shell:
+    cmd: "set -o pipefail; qm config {{ item.vm_id }} | grep -qx 'template: 1'"
+  loop: "{{ ct_active_templates }}"
+  when:
+    - ct_vm_existence[item.vm_id] == "exists"
+    - item.recreate | bool
+  register: ct_template_guard
+  failed_when: ct_template_guard.rc != 0
+  changed_when: false
+
 - name: Stop running VMs if they exist before destroying
   ansible.builtin.command:
     cmd: "qm stop {{ item.vm_id }}"
@@ -175,16 +197,6 @@
     - item.stdout is defined
     - item.stdout | trim != "none"
     - item.stdout | trim | length > 0
-
-- name: "Unlock existing VM/template if locked (ID {{ item.vm_id }})"
-  ansible.builtin.command:
-    cmd: "qm unlock {{ item.vm_id }}"
-  loop: "{{ ct_active_templates }}"
-  when:
-    - ct_vm_existence[item.vm_id] == "exists"
-    - item.recreate | bool
-  failed_when: false
-  changed_when: false
 
 - name: Destroy existing VMs/Templates if they exist and recreate is true
   ansible.builtin.command:

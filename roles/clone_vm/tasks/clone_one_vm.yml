@@ -66,6 +66,14 @@
     - "'template: 1' not in (cv_existing_vm_config.stdout | default(''))"
     - (cv_existing_vm_name.stdout | default('') | trim) != new_vm_name
 
+# Unlock VM (in case of interrupted clone) before any stop/destroy
+- name: "Unlock existing VM if locked (ID {{ new_vm_id }})"
+  ansible.builtin.command:
+    cmd: "qm unlock {{ new_vm_id }}"
+  when: cv_vm_config_exists.rc == 0 and recreate_vm | bool
+  failed_when: false
+  changed_when: false
+
 # Check whether the existing VM is currently running (to avoid qm stop on an already-stopped VM)
 - name: "Check if existing VM is running (ID {{ new_vm_id }})"
   ansible.builtin.shell:
@@ -175,14 +183,6 @@
   until: cv_stop_result.rc == 0
   retries: 3
   delay: 10
-
-# Unlock VM (in case of interrupted clone) before destroy
-- name: "Unlock existing VM if locked (ID {{ new_vm_id }})"
-  ansible.builtin.command:
-    cmd: "qm unlock {{ new_vm_id }}"
-  when: cv_vm_config_exists.rc == 0 and recreate_vm | bool
-  failed_when: false
-  changed_when: false
 
 # Destroy existing VM (if exists and recreate=true)
 - name: "Destroy existing VM if it exists and recreate is true (ID {{ new_vm_id }})"
