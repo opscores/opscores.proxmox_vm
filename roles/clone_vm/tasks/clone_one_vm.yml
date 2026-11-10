@@ -136,17 +136,17 @@
     cmd: >-
       qm set {{ new_vm_id }}
       {% if clone_vm_memory is defined and clone_vm_memory != omit and
-            (clone_vm_memory | string | trim | length) > 0 %}--memory {{ clone_vm_memory }}{% endif %}
-      {% if clone_vm_cores is defined and clone_vm_cores != omit and (clone_vm_cores | string | trim | length) > 0 %}--cores {{ clone_vm_cores }}{% endif %}
+            (clone_vm_memory | string | trim | length) > 0 %}--memory {{ clone_vm_memory }} {% endif %}
+      {% if clone_vm_cores is defined and clone_vm_cores != omit and (clone_vm_cores | string | trim | length) > 0 %}--cores {{ clone_vm_cores }} {% endif %}
       {% if clone_vm_ostype is defined and clone_vm_ostype != omit and
-            (clone_vm_ostype | string | trim | length) > 0 %}--ostype {{ clone_vm_ostype }}{% endif %}
+            (clone_vm_ostype | string | trim | length) > 0 %}--ostype {{ clone_vm_ostype }} {% endif %}
       {% if clone_vm_machine is defined and clone_vm_machine != omit and
-            (clone_vm_machine | string | trim | length) > 0 %}--machine {{ clone_vm_machine }}{% endif %}
-      {% if clone_vm_bios is defined and clone_vm_bios != omit and (clone_vm_bios | string | trim | length) > 0 %}--bios {{ clone_vm_bios }}{% endif %}
-      {% if clone_vm_cpu is defined and clone_vm_cpu != omit and (clone_vm_cpu | string | trim | length) > 0 %}--cpu {{ clone_vm_cpu }}{% endif %}
+            (clone_vm_machine | string | trim | length) > 0 %}--machine {{ clone_vm_machine }} {% endif %}
+      {% if clone_vm_bios is defined and clone_vm_bios != omit and (clone_vm_bios | string | trim | length) > 0 %}--bios {{ clone_vm_bios }} {% endif %}
+      {% if clone_vm_cpu is defined and clone_vm_cpu != omit and (clone_vm_cpu | string | trim | length) > 0 %}--cpu {{ clone_vm_cpu }} {% endif %}
       {% if clone_vm_scsihw is defined and clone_vm_scsihw != omit and
-            (clone_vm_scsihw | string | trim | length) > 0 %}--scsihw {{ clone_vm_scsihw }}{% endif %}
-      {% if clone_vm_agent is defined and clone_vm_agent != omit and (clone_vm_agent | string | trim | length) > 0 %}--agent {{ clone_vm_agent }}{% endif %}
+            (clone_vm_scsihw | string | trim | length) > 0 %}--scsihw {{ clone_vm_scsihw }} {% endif %}
+      {% if clone_vm_agent is defined and clone_vm_agent != omit and (clone_vm_agent | string | trim | length) > 0 %}--agent {{ clone_vm_agent }} {% endif %}
   when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
   register: cv_config_result
   changed_when: "cv_config_result.stderr | length > 0"
@@ -284,7 +284,7 @@
   ansible.builtin.set_fact:
     cv_effective_static_ip: >-
       {% set ips = static_ip_addresses | default([]) %}
-      {% if ips | length > 0 %}{{ ips[cv_vm_index | default(0) | int] }}{% else %}{{ static_ip_address }}{% endif %}
+      {% if ips | length > 0 %}{{ ips[cv_vm_index | default(0) | int] | trim }}{% else %}{{ static_ip_address | trim }}{% endif %}
   changed_when: false
   when: not (use_dhcp_ip | default(true) | bool)
 
@@ -326,7 +326,7 @@
   ansible.builtin.command:
     cmd: >-
       qm set {{ new_vm_id }} --cicustom user={{ snippets_storage }}:snippets/ci-{{ new_vm_id }}.yaml
-      --ipconfig0 'ip={{ cv_effective_static_ip }}/{{ static_subnet_mask }},gw={{ static_gateway }}'
+      --ipconfig0 'ip={{ cv_effective_static_ip | trim }}/{{ static_subnet_mask }},gw={{ static_gateway }}'
       --nameserver '{{ dns_servers }}' --searchdomain '{{ search_domains }}' --ciupgrade 0
   when:
     - (cv_vm_config_exists.rc != 0 or recreate_vm | bool)
