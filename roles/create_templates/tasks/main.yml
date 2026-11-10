@@ -141,10 +141,19 @@
     cmd: |
       set -o pipefail
       dependents=""
-      for vid in $(qm list 2>/dev/null | awk 'NR>1 {print $1}'); do
-        if qm config "$vid" 2>/dev/null | grep -qE "parent:[[:space:]]*{{ item.vm_id }}([[:space:]]|$)"; then
-          dependents="$dependents $vid"
-        fi
+      # Detect linked clones via LVM thin snapshots: any volume whose origin is
+      # a base volume of this template (base-<id>-*) implies a dependent VM.
+      for origin in $(lvs --noheadings -o origin {{ vm_storage_pool }} 2>/dev/null | sort -u); do
+        case "$origin" in
+          base-{{ item.vm_id }}-*)
+            for lv in $(lvs --noheadings -o lv_name,origin {{ vm_storage_pool }} 2>/dev/null | awk -v o="$origin" '$2==o {print $1}'); do
+              vid=$(echo "$lv" | sed -n 's/^vm-\([0-9]*\)-.*/\1/p')
+              if [ -n "$vid" ] && [ "$vid" != "{{ item.vm_id }}" ]; then
+                case " $dependents " in *" $vid "*) ;; *) dependents="$dependents $vid" ;; esac
+              fi
+            done
+            ;;
+        esac
       done
       echo "${dependents:-none}"
   loop: "{{ ct_active_templates }}"

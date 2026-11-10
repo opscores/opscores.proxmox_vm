@@ -217,7 +217,7 @@
       qm clone {{ source_vm_id }} {{ new_vm_id }} --name {{ new_vm_name }}
       --full {{ full_clone | ternary('1', '0') }}
       {% if target_node | default('') != '' and target_node != ansible_hostname %}--target {{ target_node }}{% endif %}
-      --storage {{ storage_pool }}
+      {% if full_clone | bool %}--storage {{ storage_pool }}{% endif %}
   when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
   register: cv_clone_result
   changed_when: true
