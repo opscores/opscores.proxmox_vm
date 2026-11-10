@@ -176,6 +176,14 @@
   retries: 3
   delay: 10
 
+# Unlock VM (in case of interrupted clone) before destroy
+- name: "Unlock existing VM if locked (ID {{ new_vm_id }})"
+  ansible.builtin.command:
+    cmd: "qm unlock {{ new_vm_id }}"
+  when: cv_vm_config_exists.rc == 0 and recreate_vm | bool
+  failed_when: false
+  changed_when: false
+
 # Destroy existing VM (if exists and recreate=true)
 - name: "Destroy existing VM if it exists and recreate is true (ID {{ new_vm_id }})"
   ansible.builtin.command:

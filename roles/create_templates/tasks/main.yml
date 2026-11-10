@@ -176,6 +176,16 @@
     - item.stdout | trim != "none"
     - item.stdout | trim | length > 0
 
+- name: "Unlock existing VM/template if locked (ID {{ item.vm_id }})"
+  ansible.builtin.command:
+    cmd: "qm unlock {{ item.vm_id }}"
+  loop: "{{ ct_active_templates }}"
+  when:
+    - ct_vm_existence[item.vm_id] == "exists"
+    - item.recreate | bool
+  failed_when: false
+  changed_when: false
+
 - name: Destroy existing VMs/Templates if they exist and recreate is true
   ansible.builtin.command:
     cmd: "qm destroy {{ item.vm_id }} --purge"
