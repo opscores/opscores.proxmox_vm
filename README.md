@@ -173,6 +173,7 @@ os_templates:
     # Optional per-OS overrides:
     # memory: 2048
     # cores: 2
+    # scsi_disk_slot: sata0   # disk slot to attach/resize (default: scsi0)
 ```
 
 See [docs/overrides.md](docs/overrides.md) for examples of overriding parameters and adding new OS.
@@ -211,6 +212,7 @@ The role includes the following checks:
 - `clone_vm_disk_size`: Disk size for the cloned VM (empty by default -> keeps template disk size)
 - `vm_resize_disk`: Master toggle for disk resize when cloning (default: true). Set to false to skip resizing even if `clone_vm_disk_size` is set
 - `clone_vm_disk_slot`: Disk slot to resize (default: scsi0). Set explicitly if the template uses a different slot (e.g. sata0, virtio0).
+- `update_vm_config`: Reconcile memory/cores/cpu on skip without recreating the VM (default: false). Cloud-init changes still require `recreate_vm: true`.
 - **Bulk clone** — create N VMs from one template:
   - `vm_count`: number of VMs to clone (default 1 = backward compat). VM IDs are contiguous starting at `new_vm_id`.
   - `new_vm_ids`: explicit list of VM IDs (takes priority over `vm_count`).
@@ -229,6 +231,14 @@ The role includes the following checks:
 - `static_ip_addresses`: Per-VM static IPs for bulk clone (list; takes priority over `static_ip_address` when non-empty). Length must match the number of cloned VMs.
 - `static_subnet_mask`: Subnet mask in CIDR format (default: "24")
 - `static_gateway`: Static gateway address (e.g., "192.168.1.1")
+
+## Safety & Idempotency Notes
+
+- **Template protection**: `create_templates` refuses to recreate an existing VM that is not a template (`template: 1` guard). `clone_vm` always refuses to destroy templates.
+- **Idempotency (limitation)**: on a repeated run with the same parameters the existing VM is skipped (changed=0) **without updating its configuration** (memory, cores, …). To change a VM's config use `update_vm_config: true` (reconciles memory/cores/cpu without recreating) or `recreate_vm: true` (destroys and recreates).
+- **`vm_id_min`**: validation only — the role checks that generated IDs are not below `vm_id_min`, but does not shift IDs automatically. Set `new_vm_id` ≥ `vm_id_min` from the start.
+- **`full_clone: false`** (linked clone): the clone depends on the source template — recreating the template breaks all linked clones. Default is `true`.
+- **`clone_vm_disk_slot` / `scsi_disk_slot`**: default `scsi0`. Set explicitly (e.g. `sata0`, `virtio0`) if the template uses a non-standard slot.
 
 ## Security Considerations
 

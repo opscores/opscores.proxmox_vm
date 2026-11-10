@@ -135,6 +135,9 @@ URL образов в `os_templates` (`defaults/main.yml`) берутся из *
   - Установите `"20G"` и включите мастер-переключатель `vm_resize_disk: true`, чтобы увеличить диск.
 - **Слот диска** (`clone_vm_disk_slot`, по умолчанию `scsi0`). Задайте явно, если шаблон
   использует другой слот (например `sata0`, `virtio0`).
+- **`scsi_disk_slot` в `os_templates`** (create_templates): по умолчанию `scsi0`. Задайте
+  явно (`sata0`, `virtio0` и т.д.), если шаблон использует нестандартный слот диска — иначе
+  attach и resize разойдутся.
 
 ---
 
@@ -286,6 +289,7 @@ vars:
 | `static_ip_addresses has N entries but M VMs` | Длина списка IP не совпадает с числом ВМ | Укажите один IP на ВМ или используйте DHCP |
 | `Missing required variable(s)` (cloud_password/target_node) | Не задан пароль cloud-init или узел | Задайте `cloud_password` (непустой) и `target_node` |
 | `Template X has dependent VMs` | `recreate_templates: true` при наличии linked clones | Удалите/мигрируйте клоны или `recreate_templates: false` |
+| `VM X is not a template, refusing to recreate` | `recreate_templates: true` на VM, которая не является шаблоном | Убедитесь, что `template_id` указывает на шаблон (`template: 1`), а не на обычную ВМ |
 | `~/.ssh/id_rsa.pub` not found | Файл ключа отсутствует на control node | Создайте ключ или переопределите `ssh_public_key` |
 
 ---
