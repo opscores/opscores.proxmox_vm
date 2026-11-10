@@ -13,6 +13,13 @@ vm_resize_disk: true
 clone_vm_disk_size: ""
 clone_vm_disk_slot: "scsi0"  # disk slot to resize (override if template uses another slot)
 
+# Bulk clone options (create N VMs from one template)
+vm_count: 1                          # number of VMs to clone (default 1 = backward compat)
+new_vm_ids: []                       # explicit list of VM IDs (takes priority over vm_count)
+vm_name_pattern: ""                  # name template with {index} (padded) / {index_raw} placeholders
+vm_name_index_padding: 2             # 0 = no padding, >0 = min digits (auto-scales up for large counts)
+vm_id_min: 0                         # optional lower bound for generated IDs (0 = no limit)
+
 clone_vm_memory: "{{ vm_memory | default(omit) }}"
 clone_vm_cores: "{{ vm_cores | default(omit) }}"
 clone_vm_ostype: "{{ vm_ostype | default(omit) }}"

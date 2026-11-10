@@ -1,8 +1,9 @@
 ---
 # tasks file for clone_vm role
+# Orchestrator: global preflight + build VM list + loop over clone_one_vm.yml
 
 # ============================================================
-# Preflight checks
+# Preflight checks (global, run once)
 # ============================================================
 
 # 0. Detect Proxmox VE major version (non-blocking, informational)
@@ -44,15 +45,7 @@
   failed_when: (cv_storage_free.stdout | int / 1048576) | int < storage_min_free_gb
   changed_when: false
 
-# 3. Check if VM config exists for {{ new_vm_id }}
-- name: "Check if VM config file exists for ID {{ new_vm_id }}"
-  ansible.builtin.command:
-    cmd: "qm status {{ new_vm_id }}"
-  register: cv_vm_config_exists
-  changed_when: false
-  failed_when: false
-
-# 4. Verify local storage has snippets content type (precise check)
+# 4. Verify local storage supports snippets
 - name: "Verify local storage supports snippets"
   ansible.builtin.shell:
     cmd: >-
@@ -83,13 +76,11 @@
   changed_when: false
   when: cv_should_resize_disk
 
-# 5. Validate required variables for clone_vm
+# 5. Validate required variables
 - name: "Validate required variables are defined"
   ansible.builtin.assert:
     that:
       - source_vm_id is defined
-      - new_vm_id is defined
-      - new_vm_name is defined
       - os_type is defined
       - target_node is defined
       - storage_pool is defined
@@ -97,289 +88,131 @@
       - cloud_user is defined
       - cloud_password is defined
       - ssh_public_key is defined
+      - new_vm_name is defined
+      - (new_vm_id is defined) or (new_vm_ids | default([]) | length > 0)
     fail_msg: >
-      Missing required variable(s). Required: source_vm_id, new_vm_id, new_vm_name,
-      os_type, target_node, storage_pool, full_clone, cloud_user, cloud_password, ssh_public_key
+      Missing required variable(s). Required: source_vm_id, os_type, target_node, storage_pool,
+      full_clone, cloud_user, cloud_password, ssh_public_key, new_vm_name, and either new_vm_id
+      (base) or new_vm_ids (list).
       Current values: source_vm_id={{ source_vm_id | default('UNDEFINED') }},
-      new_vm_id={{ new_vm_id | default('UNDEFINED') }}, new_vm_name={{ new_vm_name | default('UNDEFINED') }},
-      os_type={{ os_type | default('UNDEFINED') }}, target_node={{ target_node | default('UNDEFINED') }},
-      storage_pool={{ storage_pool | default('UNDEFINED') }}, full_clone={{ full_clone | default('UNDEFINED') }},
+      new_vm_id={{ new_vm_id | default('UNDEFINED') }},
+      new_vm_name={{ new_vm_name | default('UNDEFINED') }},
+      os_type={{ os_type | default('UNDEFINED') }},
+      target_node={{ target_node | default('UNDEFINED') }},
+      storage_pool={{ storage_pool | default('UNDEFINED') }},
+      full_clone={{ full_clone | default('UNDEFINED') }},
       cloud_user={{ cloud_user | default('***redacted***') }}, cloud_password=***redacted***,
       ssh_public_key={{ ssh_public_key | default('***redacted***') }}
 
-# ============================================================
-# Validate VM ID range
-# ============================================================
-
-- name: "Validate VM ID is in valid Proxmox range"
+# Validate vm_count
+- name: "Validate vm_count is a positive integer"
   ansible.builtin.assert:
     that:
-      - new_vm_id | int >= 100
-      - new_vm_id | int <= 999999999
-    fail_msg: >
-      Invalid VM ID {{ new_vm_id }}. Must be between 100 and 999999999.
+      - vm_count | int >= 1
+    fail_msg: "vm_count must be >= 1, got {{ vm_count }}"
 
-- name: "Validate hostname is RFC 1123 compliant"
+# Build the list of VMs to clone (raw string, then parse to a real list)
+- name: "Build raw list of VMs to clone (count={{ vm_count }})"
+  ansible.builtin.set_fact:
+    cv_vm_list_raw: >-
+      {% set ids = [] %}
+      {% if new_vm_ids | default([]) | length > 0 %}
+      {% for id in new_vm_ids %}
+      {% set _ = ids.append(id | int) %}
+      {% endfor %}
+      {% else %}
+      {% for i in range(vm_count | int) %}
+      {% set _ = ids.append((new_vm_id | int) + i) %}
+      {% endfor %}
+      {% endif %}
+      {% set count = ids | length %}
+      {% set pad_raw = vm_name_index_padding | default(2) | int %}
+      {% if pad_raw <= 0 %}
+      {% set pad = 0 %}
+      {% else %}
+      {% set pad = [pad_raw, (count | string | length) | int] | max %}
+      {% endif %}
+      {% set result = [] %}
+      {% for i in range(count) %}
+      {% set idx = i + 1 %}
+      {% if pad_raw <= 0 %}
+      {% set padded = idx | string %}
+      {% else %}
+      {% set padded = '%0*d' | format(pad, idx) %}
+      {% endif %}
+      {% set raw = idx | string %}
+      {% if vm_name_pattern | default('') | length > 0 %}
+      {% set vmname = vm_name_pattern | replace('{index}', padded) | replace('{index_raw}', raw) %}
+      {% elif count == 1 %}
+      {% set vmname = new_vm_name %}
+      {% else %}
+      {% set vmname = new_vm_name ~ '-' ~ padded %}
+      {% endif %}
+      {% set _ = result.append({'id': ids[i], 'name': vmname}) %}
+      {% endfor %}
+      {{ result }}
+  changed_when: false
+
+# Parse the rendered string into a real list (Ansible otherwise keeps it as a string)
+- name: "Parse VM list into a real list"
+  ansible.builtin.set_fact:
+    cv_vm_list: "{{ cv_vm_list_raw | from_yaml }}"
+  changed_when: false
+
+# Validate generated IDs are in Proxmox range
+- name: "Validate generated VM IDs are in Proxmox range"
   ansible.builtin.assert:
     that:
-      - new_vm_name is match('^[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?)*$')
-    fail_msg: >
-      Invalid hostname '{{ new_vm_name }}'. RFC 1123 requires: alphanumeric characters,
-      hyphens, and dots only. Each label must start and end with alphanumeric (max 63 chars).
-      Underscores and other special characters are not allowed.
+      - item.id | int >= 100
+      - item.id | int <= 999999999
+    fail_msg: "Generated VM ID {{ item.id }} is out of Proxmox range (100-999999999)"
+  loop: "{{ cv_vm_list }}"
 
-# ============================================================
-# Remove existing VM (recreate)
-# ============================================================
+# Validate generated IDs against vm_id_min (if set)
+- name: "Validate generated VM IDs against vm_id_min"
+  ansible.builtin.assert:
+    that:
+      - item.id | int >= (vm_id_min | default(0) | int)
+    fail_msg: "Generated VM ID {{ item.id }} is below vm_id_min {{ vm_id_min }}"
+  loop: "{{ cv_vm_list }}"
+  when: vm_id_min | default(0) | int > 0
 
-# 4. Stop existing VM (if running and recreate=true)
-- name: "Stop existing VM if it exists and is running and recreate is true (ID {{ new_vm_id }})"
-  ansible.builtin.command:
-    cmd: "qm stop {{ new_vm_id }}"
-  when: cv_vm_config_exists.rc == 0 and recreate_vm | bool
-  failed_when: false
-  register: cv_stop_result
-  changed_when: true
-  until: cv_stop_result.rc == 0
-  retries: 3
-  delay: 10
+# Validate generated hostnames are RFC 1123 compliant
+- name: "Validate generated hostnames are RFC 1123 compliant"
+  ansible.builtin.assert:
+    that:
+      - item.name is match('^[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?)*$')
+    fail_msg: "Generated hostname '{{ item.name }}' is not RFC 1123 compliant"
+  loop: "{{ cv_vm_list }}"
 
-- name: "Destroy existing VM if it exists and recreate is true (ID {{ new_vm_id }})"
-  ansible.builtin.command:
-    cmd: "qm destroy {{ new_vm_id }} --purge"
-  when: cv_vm_config_exists.rc == 0 and recreate_vm | bool
-  register: cv_destroy_result
-  changed_when: true
+# Validate new_vm_ids has no duplicates
+- name: "Validate new_vm_ids has no duplicates"
+  ansible.builtin.assert:
+    that:
+      - (new_vm_ids | default([])) | unique | length == (new_vm_ids | default([])) | length
+    fail_msg: "new_vm_ids contains duplicate IDs"
+  when: new_vm_ids | default([]) | length > 0
 
-# 6. Report deletion
-- name: "Report that existing VM was destroyed"
-  ansible.builtin.debug:
-    msg: "Removed existing VM with ID {{ new_vm_id }} to proceed with creation."
-  when: cv_vm_config_exists.rc == 0 and recreate_vm | bool and cv_destroy_result is defined and cv_destroy_result.changed
+# (Collision handling moved into clone_one_vm.yml: existing VMs with a different
+#  name fail; same name means idempotent skip.)
 
-- name: "Clean up orphaned cloud-init snippet for recreated VM"
-  ansible.builtin.file:
-    path: "{{ snippets_path }}/ci-{{ new_vm_id }}.yaml"
-    state: absent
-  when: cv_vm_config_exists.rc == 0 and recreate_vm | bool
-
-# ============================================================
-# Validation and cloning
-# ============================================================
-
-# 7. Verify source template {{ source_vm_id }} exists
+# Verify source template exists (once)
 - name: "Check if source template exists and is a template"
   ansible.builtin.shell:
     cmd: "set -o pipefail; qm config {{ source_vm_id }} | grep -qx 'template: 1'"
-  register: cv_template_check
+  register: cv_source_template_check
   changed_when: false
-  failed_when: cv_template_check.rc != 0
-  when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
-
-# 8. Clone VM from template {{ source_vm_id }} to {{ new_vm_id }}
-- name: "Clone VM from template"
-  ansible.builtin.command:
-    cmd: >-
-      qm clone {{ source_vm_id }} {{ new_vm_id }} --name {{ new_vm_name }}
-      --full {{ full_clone | ternary('1', '0') }}
-      {% if target_node | default('') != '' and target_node != ansible_hostname %}--target {{ target_node }}{% endif %}
-      --storage {{ storage_pool }}
-  when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
-  register: cv_clone_result
-  changed_when: true
-  until: cv_clone_result.rc == 0
-  retries: 3
-  delay: 10
+  failed_when: cv_source_template_check.rc != 0
 
 # ============================================================
-# Hardware configuration
+# Clone each VM
 # ============================================================
 
-# 9. Memory / Cores / OS type / Machine / BIOS / CPU / SCSI / Agent
-- name: "Configure VM hardware (memory, cores, ostype, machine, bios, cpu, scsihw, agent)"
-  ansible.builtin.command:
-    cmd: >-
-      qm set {{ new_vm_id }}
-      {% if clone_vm_memory is defined and clone_vm_memory != omit %}--memory {{ clone_vm_memory }}{% endif %}
-      {% if clone_vm_cores is defined and clone_vm_cores != omit %}--cores {{ clone_vm_cores }}{% endif %}
-      {% if clone_vm_ostype is defined and clone_vm_ostype != omit %}--ostype {{ clone_vm_ostype }}{% endif %}
-      {% if clone_vm_machine is defined and clone_vm_machine != omit %}--machine {{ clone_vm_machine }}{% endif %}
-      {% if clone_vm_bios is defined and clone_vm_bios != omit %}--bios {{ clone_vm_bios }}{% endif %}
-      {% if clone_vm_cpu is defined and clone_vm_cpu != omit %}--cpu {{ clone_vm_cpu }}{% endif %}
-      {% if clone_vm_scsihw is defined and clone_vm_scsihw != omit %}--scsihw {{ clone_vm_scsihw }}{% endif %}
-      {% if clone_vm_agent is defined and clone_vm_agent != omit %}--agent {{ clone_vm_agent }}{% endif %}
-  when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
-  register: cv_config_result
-  changed_when: "cv_config_result.stderr | length > 0"
-  failed_when: cv_config_result.rc != 0 and 'no state change' not in cv_config_result.stderr
-  until: cv_config_result.rc == 0
-  retries: 3
-  delay: 10
-
-# ============================================================
-# Disk
-# ============================================================
-
-# 10a. Get current disk size before resize (if enabled)
-- name: "Get current disk size for VM disk slot {{ clone_vm_disk_slot }}"
-  ansible.builtin.shell:
-    cmd: "set -o pipefail; qm config {{ new_vm_id }} | grep -E '{{ clone_vm_disk_slot }}.*size=' | head -1"
-  register: cv_current_size_raw
-  changed_when: false
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and cv_should_resize_disk
-
-- name: "Validate new disk size is larger than current for {{ clone_vm_disk_slot }}"
-  ansible.builtin.shell:
-    cmd: |
-      set -o pipefail
-      CURRENT=$(echo "{{ cv_current_size_raw.stdout }}" | grep -oP '{{ clone_vm_disk_slot }}.*size=\K[^,]*' || echo '') && \
-      NEW="{{ clone_vm_disk_size }}" && \
-      if [ "${CURRENT}" = "" ]; then exit 0; fi && \
-      CUR_VAL="${CURRENT%[GgMm]}"; CUR_UNIT="${CURRENT: -1}" && \
-      NEW_VAL="${NEW%[GgMm]}"; NEW_UNIT="${NEW: -1}" && \
-      if [ "$CUR_UNIT" = "M" ]; then CUR_MB="$CUR_VAL"; elif [ "$CUR_UNIT" = "G" ]; then CUR_MB=$(( CUR_VAL * 1024 )); else CUR_MB="$CUR_VAL"; fi && \
-      if [ "$NEW_UNIT" = "G" ]; then NEW_MB=$(( NEW_VAL * 1024 )); elif [ "$NEW_UNIT" = "M" ]; then NEW_MB="$NEW_VAL"; else NEW_MB="$NEW_VAL"; fi && \
-      if [[ "$NEW_MB" =~ ^[0-9]+$ ]] && (( NEW_MB >= CUR_MB )); then echo "OK: ${NEW} >= ${CURRENT}"; else exit 1; fi
-    executable: /bin/bash
-  register: cv_disk_validation
-  changed_when: false
-  failed_when: false
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and cv_should_resize_disk
-
-- name: "Fail if new disk size is not larger than current"
-  ansible.builtin.fail:
-    msg: >
-      Disk resize would shrink {{ clone_vm_disk_slot }} from {{ cv_current_size_raw.stdout }} to {{ clone_vm_disk_size }}.
-      Resize only supports expanding disks, not shrinking them.
-  when:
-    - cv_should_resize_disk
-    - cv_disk_validation is not skipped
-    - cv_disk_validation.rc is defined
-    - cv_disk_validation.rc != 0
-
-- name: "Resize VM disk if enabled"
-  ansible.builtin.command:
-    cmd: "qm resize {{ new_vm_id }} {{ clone_vm_disk_slot }} {{ clone_vm_disk_size }}"
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and cv_should_resize_disk
-  register: cv_resize_result
-  changed_when: "cv_resize_result.stderr | length > 0"
-  failed_when: cv_resize_result.rc != 0 and 'no state change' not in cv_resize_result.stderr
-  until: cv_resize_result.rc == 0
-  retries: 3
-  delay: 10
-
-# 11. Wait for disk resize to complete and verify
-- name: "Wait for disk resize to complete and verify"
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail; qm config {{ new_vm_id }} |
-      grep -oP '{{ clone_vm_disk_slot }}.*size=\K[^,]*' |
-      awk '{ s=$0; u=toupper(substr(s,length(s),1)); v=s; sub(/[A-Za-z]$/,"",v);
-             if (u=="G") print v*1024; else if (u=="M") print v;
-             else if (u=="T") print v*1048576; else print v }'
-  register: cv_disk_size_check
-  changed_when: false
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and cv_should_resize_disk and cv_resize_result is succeeded
-  retries: 5
-  delay: 5
-  until: (cv_disk_size_check.stdout | int) >= (cv_expected_disk_size_mb | int)
-
-# ============================================================
-# Cloud-init
-# ============================================================
-
-# 11a. Report when disk resize was not requested (template size retained)
-- name: "Report disk resize skipped (template size retained)"
-  ansible.builtin.debug:
-    msg: >
-      Disk resize not requested (clone_vm_disk_size empty or vm_resize_disk false).
-      VM keeps the template disk size for {{ clone_vm_disk_slot }}.
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and not cv_should_resize_disk
-
-# 12. Validate cloud-init template exists for os_type
-- name: "Fail if cloud-init template not found"
-  ansible.builtin.fail:
-    msg: >
-      Cloud-init template for os_type='{{ os_type }}' not found.
-      Available: {{ lookup('fileglob', role_path ~ '/templates/cloud-init-*.yaml.j2', wantlist=True)
-                    | map('basename') | map('regex_replace', '^cloud-init-|\.yaml\.j2$', '') | list }}
-  when: lookup('fileglob', role_path ~ '/templates/cloud-init-' ~ os_type ~ '.yaml.j2') == ''
-
-# 12a. Validate static IP configuration
-- name: "Fail if static IP configured without required addresses"
-  ansible.builtin.fail:
-    msg: >
-      use_dhcp_ip is false but static_ip_address or static_gateway is empty.
-      Set static_ip_address='{{ static_ip_address }}' and static_gateway='{{ static_gateway }}'
-      or enable use_dhcp_ip=true.
-  when: >
-    not (use_dhcp_ip | default(true) | bool) and
-    (static_ip_address == "" or static_gateway == "")
-
-# 13. Generate cloud-init user data from template
-- name: "Generate complete cloud-init user data from template"
-  ansible.builtin.template:
-    src: "templates/cloud-init-{{ os_type }}.yaml.j2"
-    dest: "{{ snippets_path }}/ci-{{ new_vm_id }}.yaml"
-    mode: '0600'
-  when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
-
-# 13. Configure cloud-init (DHCP)
-- name: "Configure cloud-init with DHCP for new VM {{ new_vm_name }}"
-  ansible.builtin.command:
-    cmd: >-
-      qm set {{ new_vm_id }} --cicustom user={{ snippets_storage }}:snippets/ci-{{ new_vm_id }}.yaml
-      --ipconfig0 ip=dhcp --nameserver '{{ dns_servers }}'
-      --searchdomain '{{ search_domains }}' --ciupgrade 0
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and (use_dhcp_ip | default(true))
-  register: cv_set_dhcp_result
-  changed_when: "cv_set_dhcp_result.stderr | length > 0"
-  until: cv_set_dhcp_result.rc == 0
-  retries: 3
-  delay: 10
-
-# 14. Configure cloud-init (static IP)
-- name: "Configure cloud-init with static IP for new VM {{ new_vm_name }}"
-  ansible.builtin.command:
-    cmd: >-
-      qm set {{ new_vm_id }} --cicustom user={{ snippets_storage }}:snippets/ci-{{ new_vm_id }}.yaml
-      --ipconfig0 'ip={{ static_ip_address }}/{{ static_subnet_mask }},gw={{ static_gateway }}'
-      --nameserver '{{ dns_servers }}' --searchdomain '{{ search_domains }}' --ciupgrade 0
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and (not use_dhcp_ip | default(true)) and static_ip_address != "" and static_gateway != ""
-  register: cv_set_static_result
-  changed_when: "cv_set_static_result.stderr | length > 0"
-  until: cv_set_static_result.rc == 0
-  retries: 3
-  delay: 10
-
-# 15. Update cloud-init drive
-- name: "Update cloud-init drive with new data"
-  ansible.builtin.command:
-    cmd: "qm cloudinit update {{ new_vm_id }}"
-  when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
-  register: cv_ci_update_result
-  changed_when: "cv_ci_update_result.stderr | length > 0"
-  until: cv_ci_update_result.rc == 0
-  retries: 3
-  delay: 10
-
-# ============================================================
-# Startup
-# ============================================================
-
-# 16. Start VM
-- name: "Start the new VM {{ new_vm_name }}"
-  ansible.builtin.command:
-    cmd: "qm start {{ new_vm_id }}"
-  when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
-  register: cv_start_result
-  changed_when: true
-  until: cv_start_result.rc == 0
-  retries: 3
-  delay: 10
-
-# 17. Final output
-- name: "Final Output"
-  ansible.builtin.debug:
-    msg: "VM {{ new_vm_name }} (ID: {{ new_vm_id }}) created and started successfully."
-  when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
+- name: "Clone VMs from template (count={{ cv_vm_list | length }})"
+  ansible.builtin.include_tasks: clone_one_vm.yml
+  loop: "{{ cv_vm_list }}"
+  loop_control:
+    loop_var: cv_vm
+  vars:
+    new_vm_id: "{{ cv_vm.id }}"
+    new_vm_name: "{{ cv_vm.name }}"
