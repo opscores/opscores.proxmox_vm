@@ -4,6 +4,11 @@
   serial: 1
   vars:
     cleanup_downloaded_images: false
+    # recreate_templates: true   # destroy and recreate existing templates
+    # os_templates:             # override per-OS (e.g. scsi_disk_slot, memory, cores)
+    #   ubuntu24:
+    #     template_id: 3000
+    #     scsi_disk_slot: sata0   # non-standard slot (default: scsi0)
 
   tasks:
     - name: Create Templates

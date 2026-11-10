@@ -19,12 +19,18 @@
     storage_pool: "{{ vm_storage_pool }}"
     full_clone: true
 
+    # Optional: update VM config on skip (memory/cores/cpu) without recreating
+    # update_vm_config: false   # default: false
+    # scsi_disk_slot: scsi0     # if template uses non-standard slot (default: scsi0)
 
     # Bulk clone options (create N VMs from one template) — uncomment as needed:
     # vm_count: 4                 # create 4 VMs, IDs new_vm_id..new_vm_id+3
     # new_vm_ids: [8020, 8025]    # explicit ID list (takes priority over vm_count)
     # vm_name_pattern: "k8s-{index}"   # name template ({index} padded / {index_raw} raw)
     # vm_id_min: 0                # optional lower bound for generated IDs
+    # static_ip_addresses:        # per-VM static IPs for bulk clone
+    #   - "192.168.1.10"
+    #   - "192.168.1.11"
 
   tasks:
     - name: Clone VM

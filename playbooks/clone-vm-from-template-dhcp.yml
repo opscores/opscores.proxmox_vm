@@ -20,6 +20,10 @@
     full_clone: true
     recreate_vm: false
 
+    # Optional: update VM config on skip (memory/cores/cpu) without recreating
+    # update_vm_config: false   # default: false
+    # scsi_disk_slot: scsi0     # if template uses non-standard slot (default: scsi0)
+
     # VM parameters (override template defaults)
     clone_vm_memory: 2048  # VM memory in MB
     clone_vm_cores: 2      # Number of CPU cores
@@ -34,6 +38,9 @@
     # new_vm_ids: [8020, 8025]    # explicit ID list (takes priority over vm_count)
     # vm_name_pattern: "k8s-{index}"   # name template ({index} padded / {index_raw} raw)
     # vm_id_min: 0                # optional lower bound for generated IDs
+    # static_ip_addresses:        # per-VM static IPs for bulk clone
+    #   - "192.168.1.10"
+    #   - "192.168.1.11"
 
   tasks:
     - name: Clone VM with DHCP
