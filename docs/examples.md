@@ -257,6 +257,33 @@ ansible-galaxy collection install git+https://github.com/username/ansible-collec
 > См. [docs/operations.md](docs/operations.md) для полного описания bulk-клонирования и
 > устранения неполадок.
 
+### 3.8. Пересоздание VM (recreate_vm)
+
+```yaml
+---
+- name: Recreate VM from template
+  hosts: proxmox
+  serial: 1
+  collections:
+    - opscores.proxmox_vm
+  vars:
+    source_vm_id: 3001
+    os_type: "almalinux"
+    new_vm_id: 8020
+    new_vm_name: "recreate-test"
+    cloud_user: "ansible"
+    cloud_password: "{{ vault_cloud_password }}"
+    ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    recreate_vm: true   # destroy and recreate if exists (name must match!)
+  tasks:
+    - name: Recreate VM
+      include_role:
+        name: clone_vm
+```
+
+> **Внимание:** `recreate_vm: true` уничтожает VM по ID. Роль проверяет, что существующее
+> имя совпадает с `new_vm_name`; шаблоны (`template: 1`) никогда не уничтожаются.
+
 ### 3.6. Bulk-клонирование со статическими IP
 
 ```yaml
