@@ -117,6 +117,24 @@
       - vm_count | int >= 1
     fail_msg: "vm_count must be >= 1, got {{ vm_count }}"
 
+# Validate static IP format (when not using DHCP)
+- name: "Validate static_ip_address format"
+  ansible.builtin.assert:
+    that:
+      - static_ip_address is match('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$')
+    fail_msg: "Invalid static_ip_address format: {{ static_ip_address }} (expected IPv4)"
+  when:
+    - not (use_dhcp_ip | default(true) | bool)
+    - (static_ip_address | default('') | trim | length > 0)
+
+- name: "Validate static_ip_addresses format"
+  ansible.builtin.assert:
+    that:
+      - item is match('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$')
+    fail_msg: "Invalid static IP in static_ip_addresses: {{ item }}"
+  loop: "{{ static_ip_addresses | default([]) }}"
+  when: not (use_dhcp_ip | default(true) | bool)
+
 # Build the list of VMs to clone (raw string, then parse to a real list)
 - name: "Build raw list of VMs to clone (count={{ vm_count }})"
   ansible.builtin.set_fact:

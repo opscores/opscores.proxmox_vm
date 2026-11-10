@@ -322,8 +322,8 @@
   ansible.builtin.command:
     cmd: >
       qm set {{ item.vm_id }}
-      --scsi0 {{ vm_storage_pool }}:vm-{{ item.vm_id }}-disk-0,discard=on,ssd=1
-      --boot order=scsi0
+      --{{ item.scsi_disk_slot }} {{ vm_storage_pool }}:vm-{{ item.vm_id }}-disk-0,discard=on,ssd=1
+      --boot order={{ item.scsi_disk_slot }}
   loop: "{{ ct_active_templates }}"
   when: ct_vm_existence[item.vm_id] == "not_exists" or item.recreate | bool
   register: ct_set_disk_result
