@@ -229,6 +229,19 @@
   delay: 10
   tags: [download]
 
+# Re-check cloud images after download — newly downloaded images must refresh the dict,
+# otherwise the import task skips them (stale stat from before download).
+- name: Re-check cloud images after download
+  ansible.builtin.stat:
+    path: "/tmp/{{ item.image_filename }}"
+  register: ct_cloud_images_post
+  loop: "{{ ct_active_templates }}"
+
+- name: Rebuild cloud images dictionary after download
+  ansible.builtin.set_fact:
+    ct_cloud_images_dict: "{{ ct_cloud_images_dict | default({}) | combine({item.item.name: item}) }}"
+  loop: "{{ ct_cloud_images_post.results }}"
+
 - name: Debug download status
   ansible.builtin.debug:
     verbosity: 1
