@@ -195,6 +195,7 @@ The role includes the following checks:
 - `search_domains`: Search domains for the VM
 - `use_dhcp_ip`: Whether to use DHCP instead of static IP (default: true)
 - `static_ip_address`: Static IP address to assign to the VM (e.g., "192.168.1.100")
+- `static_ip_addresses`: Per-VM static IPs for bulk clone (list; takes priority over `static_ip_address` when non-empty). Length must match the number of cloned VMs.
 - `static_subnet_mask`: Subnet mask in CIDR format (default: "24")
 - `static_gateway`: Static gateway address (e.g., "192.168.1.1")
 

@@ -198,6 +198,32 @@ vars:
 
 ---
 
+### Статические IP для bulk-клонирования
+
+При `vm_count > 1` один `static_ip_address` применится ко **всем** ВМ (конфликт в сети).
+Для bulk со статикой используйте список:
+
+```yaml
+vars:
+  use_dhcp_ip: false
+  static_ip_addresses: ["192.168.1.101", "192.168.1.102", "192.168.1.103"]
+  static_subnet_mask: "24"
+  static_gateway: "192.168.1.1"
+```
+
+Длина списка должна совпадать с числом клонируемых ВМ, иначе роль завершится ошибкой.
+
+### Безопасность recreate
+
+- `recreate_vm: true` уничтожает ВМ **по ID**. Роль проверяет, что существующее имя
+  совпадает с ожидаемым (`new_vm_name`); если ID занят чужой ВМ — запуск завершится ошибкой.
+- Шаблоны (`template: 1`) никогда не уничтожаются, даже при `recreate_vm: true`.
+- `create_templates` с `recreate_templates: true` уничтожает шаблон только если у него нет
+  зависимых ВМ (linked clones, определяемых по `parent:` в конфиге). Полные клоны
+  независимы и не блокируют пересоздание.
+- Частичный сбой bulk-клонирования оставляет уже созданные ВМ (rollback не выполняется);
+  повторный прогон досоздаст недостающие (идемпотентность).
+
 ## 9. Идемпотентность и recreate
 
 - Повторный прогон с теми же `new_vm_id`/именами → `changed=0`.
@@ -217,6 +243,12 @@ vars:
 | Storage не активен / snippets не поддерживаются | Storage pool не active или без content-type `snippets` | Проверьте `pvesm status`; убедитесь, что `snippets_storage` поддерживает snippets |
 | Template не найден (`source_vm_id`) | Неправильный ID шаблона или шаблон удалён | Уточните `source_vm_id` и проверьте `qm config {id}` → `template: 1` |
 | Timeout импорта образа | Образ большой / медленная сеть | Увеличьте `import_timeout_seconds` (дефолт 1200) |
+| `VM ID X is owned by Y (expected Z)` | Попытка recreate чужой ВМ (`recreate_vm: true`) | Выберите другие ID или `recreate_vm: false` |
+| `vm_name_pattern must contain {index}` | Паттерн без плейсхолдера при `vm_count > 1` | Добавьте `{index}` или `{index_raw}` в паттерн |
+| `static_ip_addresses has N entries but M VMs` | Длина списка IP не совпадает с числом ВМ | Укажите один IP на ВМ или используйте DHCP |
+| `Missing required variable(s)` (cloud_password/target_node) | Не задан пароль cloud-init или узел | Задайте `cloud_password` (непустой) и `target_node` |
+| `Template X has dependent VMs` | `recreate_templates: true` при наличии linked clones | Удалите/мигрируйте клоны или `recreate_templates: false` |
+| `~/.ssh/id_rsa.pub` not found | Файл ключа отсутствует на control node | Создайте ключ или переопределите `ssh_public_key` |
 
 ---
 
