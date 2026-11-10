@@ -5,7 +5,17 @@
 # and encrypted with ansible-vault:
 #   ansible-vault encrypt group_vars/all/vault.yml
 #
-# All playbooks must be run with --ask-vault-pass
+# All playbooks must be run with --ask-vault-pass (or set ANSIBLE_VAULT_PASSWORD_FILE).
+
+# Operational notes:
+# - Control node needs the `passlib` Python package for cloud-init password_hash().
+#   Install it:  apt install python3-passlib   (or: pip install passlib)
+# - Override per installation in group_vars/host_vars:
+#     vm_storage_pool / storage_pool    -> your active Proxmox storage pool (default local-lvm)
+#     target_node                       -> Proxmox node name (default = ansible_hostname)
+# - Snippets storage must support content-type `snippets`:
+#     snippets_storage  -> "local"   (default)
+#     snippets_path     -> "/var/lib/vz/snippets"
 
 all:
   children:

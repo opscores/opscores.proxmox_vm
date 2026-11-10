@@ -14,6 +14,17 @@ ansible-galaxy collection install opscores.proxmox_vm
 
 ## Usage
 
+### Prerequisites
+
+- **Ansible ≥ 2.16** (see `meta/runtime.yml`).
+- **Control node**: Python 3 with the **`passlib`** package — required for cloud-init template rendering (`password_hash('sha512')`). Install it:
+  ```bash
+  sudo apt install -y python3-passlib   # or: pip install passlib
+  ```
+- **Target node (Proxmox VE)**: SSH access as a user with passwordless `sudo` (or root), `qm`/`pvesm` CLI tools, and an active storage pool supporting cloud-init snippets (`snippets_storage`, default `local`).
+
+> For operational nuances and troubleshooting, see [docs/operations.md](docs/operations.md).
+
 ### Creating VM Templates from Cloud Images
 
 To create VM templates from cloud images, use the `create-vm-templates.yml` playbook:
@@ -168,8 +179,15 @@ The role includes the following checks:
 - `clone_vm_scsihw`: SCSI hardware type for the cloned VM (overrides default)
 - `clone_vm_agent`: Guest agent configuration for the cloned VM (overrides default)
 - `clone_vm_disk_size`: Disk size for the cloned VM (empty by default -> keeps template disk size)
+- `vm_resize_disk`: Whether to resize disk when cloning (default: true). Set to false to skip resizing even if `clone_vm_disk_size` is set
 - `clone_vm_disk_slot`: Disk slot to resize (default: scsi0)
-- `vm_resize_disk`: Whether to resize disk when cloning (default: true)
+- **Bulk clone** — create N VMs from one template:
+  - `vm_count`: number of VMs to clone (default 1 = backward compat). VM IDs are contiguous starting at `new_vm_id`.
+  - `new_vm_ids`: explicit list of VM IDs (takes priority over `vm_count`).
+  - `vm_name_pattern`: name template with `{index}` (padded) / `{index_raw}` (raw) placeholders.
+  - `vm_name_index_padding`: padding width (`0` = none, `>0` = min digits; auto-scales up for large counts).
+  - `vm_id_min`: optional lower bound for generated IDs (`0` = no limit).
+- **Safety**: with `recreate_vm: false`, cloning fails on a foreign VM ID collision (same ID, different name) and always refuses to destroy templates. See [docs/operations.md](docs/operations.md#8-bulk-clone).
 - `cloud_user`: Username for the cloud-init user
 - `cloud_password`: Password for the cloud-init user
 - `ssh_public_key`: SSH public key for the cloud-init user

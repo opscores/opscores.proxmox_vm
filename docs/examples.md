@@ -142,6 +142,118 @@ ansible-galaxy collection install git+https://github.com/username/ansible-collec
       loop: "{{ vm_configs }}"
 ```
 
+## Примеры bulk-клонирования (несколько ВМ из одного шаблона)
+
+### 3.1. Bulk-клонирование (`vm_count`) — N ВМ с падающими именами
+
+Создаёт `vm_count` ВМ подряд по ID (`new_vm_id .. new_vm_id + count - 1`) и именам
+с автоматическим паддингом:
+
+```yaml
+---
+- name: Clone Multiple VMs from Template (bulk)
+  hosts: proxmox
+  serial: 1
+  collections:
+    - opscores.proxmox_vm
+  vars:
+    source_vm_id: 3001          # AlmaLinux template
+    os_type: "almalinux"        # or 'ubuntu24', 'ubuntu26', 'fedora'
+    vm_count: 4                 # создать 4 ВМ
+    new_vm_id: 8020             # старт ID -> 8020, 8021, 8022, 8023
+    vm_name_pattern: "k8s-{index}"   # k8s-01 .. k8s-04 (автопаддинг до ширины count)
+    cloud_user: "ansible"
+    cloud_password: "{{ vault_cloud_password }}"
+    ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+  tasks:
+    - name: Clone VMs in bulk
+      include_role:
+        name: clone_vm
+```
+
+Результат: `8020 k8s-01`, `8021 k8s-02`, `8022 k8s-03`, `8023 k8s-04`.
+
+### 3.2. Явные ID (`new_vm_ids`) — произвольные, не обязательно подряд
+
+```yaml
+---
+- name: Clone VMs with explicit IDs
+  hosts: proxmox
+  serial: 1
+  collections:
+    - opscores.proxmox_vm
+  vars:
+    source_vm_id: 3001
+    os_type: "almalinux"
+    new_vm_ids: [8020, 8025, 8030]   # произвольные ID (приоритет над vm_count)
+    cloud_user: "ansible"
+    cloud_password: "{{ vault_cloud_password }}"
+    ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+  tasks:
+    - name: Clone VMs with explicit IDs
+      include_role:
+        name: clone_vm
+```
+
+### 3.3. Без паддинга (`vm_name_index_padding: 0`)
+
+```yaml
+---
+- name: Clone VMs without padding
+  hosts: proxmox
+  serial: 1
+  collections:
+    - opscores.proxmox_vm
+  vars:
+    source_vm_id: 3001
+    os_type: "almalinux"
+    vm_count: 5
+    new_vm_id: 8020
+    vm_name_pattern: "web-{index_raw}"   # web-1 .. web-5 (без паддинга)
+    cloud_user: "ansible"
+    cloud_password: "{{ vault_cloud_password }}"
+    ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+  tasks:
+    - name: Clone VMs without padding
+      include_role:
+        name: clone_vm
+```
+
+### 3.4. Повторный запуск — идемпотентность
+
+Повторный прогон с теми же `new_vm_id`/именами не создаёт дубликатов (`changed=0`).
+
+### 3.5. Защита ID (коллизии и шаблоны)
+
+- **Коллизия** (при `recreate_vm: false`): если target ID занят чужой ВМ с другим именем —
+  запуск завершается ошибкой. Если имя совпадает — это наша ВМ, пропуск (идемпотентно).
+- **Защита шаблонов**: если target ID является шаблоном (`template: 1`) — запуск завершается
+  ошибкой даже при `recreate_vm: true`. Шаблоны никогда не уничтожаются случайно.
+
+```yaml
+---
+- name: Clone VM (idempotent, safe against templates)
+  hosts: proxmox
+  serial: 1
+  collections:
+    - opscores.proxmox_vm
+  vars:
+    source_vm_id: 3001
+    os_type: "almalinux"
+    new_vm_id: 8020
+    new_vm_name: "k8s-01"
+    cloud_user: "ansible"
+    cloud_password: "{{ vault_cloud_password }}"
+    ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+  tasks:
+    - name: Clone VM
+      include_role:
+        name: clone_vm
+```
+
+> См. [docs/operations.md](docs/operations.md) для полного описания bulk-клонирования и
+> устранения неполадок.
+
 ## Примеры команд запуска
 
 ```bash
@@ -162,7 +274,8 @@ opscores.proxmox_vm/
 ├── docs/
 │   ├── README.md
 │   ├── overrides.md
-│   └── examples.md
+│   ├── examples.md
+│   └── operations.md          # prerequisites, bulk clone, troubleshooting
 ├── playbooks/
 │   ├── create-vm-templates.yml
 │   ├── clone-vm-from-template.yml

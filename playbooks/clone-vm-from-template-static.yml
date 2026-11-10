@@ -31,7 +31,16 @@
     static_subnet_mask: "24"  # Subnet mask in CIDR format
     static_gateway: "192.168.1.1"  # Gateway
 
+
+    # Bulk clone options (create N VMs from one template) — uncomment as needed:
+    # vm_count: 4                 # create 4 VMs, IDs new_vm_id..new_vm_id+3
+    # new_vm_ids: [8020, 8025]    # explicit ID list (takes priority over vm_count)
+    # vm_name_pattern: "k8s-{index}"   # name template ({index} padded / {index_raw} raw)
+    # vm_id_min: 0                # optional lower bound for generated IDs
+
   tasks:
     - name: Clone VM with Static IP
       ansible.builtin.include_role:
         name: opscores.proxmox_vm.clone_vm
+# **Защита ID**: при `recreate_vm: false` запуск падает на коллизиях (target ID занят чужой ВМ),
+# а шаблоны (`template: 1`) никогда не уничтожаются. См. [docs/operations.md](docs/operations.md#8-bulk-clone).

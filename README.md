@@ -8,10 +8,28 @@ This collection provides playbooks and roles for managing Proxmox virtual machin
 
 ## Requirements
 
-- Ansible 2.16+
-- Proxmox VE 9.x (developed and tested against). The collection only uses generic
+- **Ansible ≥ 2.16** (see `meta/runtime.yml`).
+- **Proxmox VE 9.x** (developed and tested against). The collection only uses generic
   `qm`/`pvesm` CLI commands with no version-specific flags, so other Proxmox VE
   versions may work, but have not been verified.
+
+### Control node prerequisites
+
+- Python 3 with the **`passlib`** package — required for cloud-init template rendering
+  (`password_hash('sha512')`). Install it on the control node:
+  ```bash
+  sudo apt install -y python3-passlib   # or: pip install passlib
+  ```
+
+### Target node prerequisites
+
+- SSH access as a user with passwordless `sudo` (or root). Roles run all commands via
+  `sudo qm …` / `pvesm status`.
+- `qm` and `pvesm` CLI tools installed.
+- An active storage pool supporting cloud-init snippets (`snippets_storage`, default `local`).
+
+> For a full list of operational nuances, prerequisites and troubleshooting, see
+> [docs/operations.md](docs/operations.md).
 
 ## Installation
 
@@ -112,6 +130,7 @@ This role creates VM templates from cloud images. It supports Ubuntu, AlmaLinux,
 - `recreate_templates`: Whether to recreate existing templates (default: false)
 - `tmp_min_free_gb`: Minimum free space in /tmp in GB (default: 5)
 - `storage_min_free_gb`: Minimum free space in storage pool in GB (default: 10)
+- `template_min_disk_size`: Minimum disk size for created templates, e.g. "12G" (default). Cloud images often ship a tiny root with no free space after it, so cloud-init growpart cannot expand the root filesystem on first boot ("No space left on device"). Resizing the template disk up here leaves headroom at the end; growpart then grows root to fill it. Do not lower this below ~12G.
 
 **VM defaults (applied to all templates unless overridden):**
 
@@ -178,7 +197,15 @@ The role includes the following checks:
 - `clone_vm_scsihw`: SCSI hardware type for the cloned VM (overrides default)
 - `clone_vm_agent`: Guest agent configuration for the cloned VM (overrides default)
 - `clone_vm_disk_size`: Disk size for the cloned VM (empty by default -> keeps template disk size)
+- `vm_resize_disk`: Master toggle for disk resize when cloning (default: true). Set to false to skip resizing even if `clone_vm_disk_size` is set
 - `clone_vm_disk_slot`: Disk slot to resize (default: scsi0)
+- **Bulk clone** — create N VMs from one template:
+  - `vm_count`: number of VMs to clone (default 1 = backward compat). VM IDs are contiguous starting at `new_vm_id`.
+  - `new_vm_ids`: explicit list of VM IDs (takes priority over `vm_count`).
+  - `vm_name_pattern`: name template with `{index}` (padded) / `{index_raw}` (raw) placeholders.
+  - `vm_name_index_padding`: padding width (`0` = none, `>0` = min digits; auto-scales up for large counts).
+  - `vm_id_min`: optional lower bound for generated IDs (`0` = no limit).
+- **Safety**: with `recreate_vm: false`, cloning fails on a foreign VM ID collision (same ID, different name) and always refuses to destroy templates. See [docs/operations.md](docs/operations.md#8-bulk-clone).
 - `vm_resize_disk`: Whether to resize disk when cloning (default: true)
 - `cloud_user`: Username for the cloud-init user
 - `cloud_password`: Password for the cloud-init user
