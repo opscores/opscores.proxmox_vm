@@ -16,6 +16,23 @@
   changed_when: false
   failed_when: false
 
+# Read existing VM config (if exists) — for template protection and collision detection
+- name: "Read existing VM config (if exists)"
+  ansible.builtin.shell:
+    cmd: "qm config {{ new_vm_id }} 2>/dev/null || true"
+  register: cv_existing_vm_config
+  changed_when: false
+  failed_when: false
+  when: cv_vm_config_exists.rc == 0
+
+# Abort if target ID is a template (safety — even with recreate_vm=true)
+- name: "Abort if target ID is a template"
+  ansible.builtin.fail:
+    msg: "VM ID {{ new_vm_id }} is a template, not a VM. Refusing to proceed. Choose a different ID."
+  when:
+    - cv_vm_config_exists.rc == 0
+    - "'template: 1' in (cv_existing_vm_config.stdout | default(''))"
+
 # Read existing VM name (if exists and not recreating) — for collision detection
 - name: "Read existing VM name (if exists)"
   ansible.builtin.shell:
@@ -24,6 +41,18 @@
   changed_when: false
   failed_when: false
   when: cv_vm_config_exists.rc == 0 and not (recreate_vm | bool)
+
+# Fail on foreign VM ID collision (same ID, different name)
+- name: "Fail on VM ID collision (foreign VM)"
+  ansible.builtin.fail:
+    msg: >
+      VM ID {{ new_vm_id }} already exists with name '{{ cv_existing_vm_name.stdout | default('') | trim }}'
+      (expected '{{ new_vm_name }}'). Set recreate_vm=true or choose different IDs.
+  when:
+    - cv_vm_config_exists.rc == 0
+    - not (recreate_vm | bool)
+    - "'template: 1' not in (cv_existing_vm_config.stdout | default(''))"
+    - (cv_existing_vm_name.stdout | default('') | trim) != new_vm_name
 
 # Fail on foreign VM ID collision (same ID, different name)
 - name: "Fail on VM ID collision (foreign VM)"
