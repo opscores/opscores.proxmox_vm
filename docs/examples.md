@@ -311,34 +311,6 @@ ansible-galaxy collection install git+https://github.com/username/ansible-collec
         name: clone_vm
 ```
 
-### 3.7. Ожидание завершения cloud-init
-
-```yaml
----
-- name: Clone VM and wait for cloud-init
-  hosts: proxmox
-  serial: 1
-  collections:
-    - opscores.proxmox_vm
-  vars:
-    source_vm_id: 3001
-    os_type: "almalinux"
-    new_vm_id: 8020
-    new_vm_name: "wait-test"
-    cloud_user: "ansible"
-    cloud_password: "{{ vault_cloud_password }}"
-    ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
-    wait_for_cloud_init: true
-    wait_for_cloud_init_retries: 60
-    wait_for_cloud_init_delay: 5
-  tasks:
-    - name: Clone VM and wait
-      include_role:
-        name: clone_vm
-```
-
-> Требует qemu-guest-agent в образе.
-
 ## Примеры команд запуска
 
 ```bash

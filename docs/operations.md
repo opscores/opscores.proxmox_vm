@@ -147,16 +147,7 @@ URL образов в `os_templates` (`defaults/main.yml`) берутся из *
 
 - На всех клонах задан флаг **`--ciupgrade 0`** → `package_upgrade` отключён при первом боте
   (для скорости). Обновления пакетов выполняйте позже вручную.
-- **Опциональное ожидание cloud-init** (`wait_for_cloud_init: true`): после старта ВМ роль
-  поллит `qm guest exec ... cloud-init status` до состояния `done`/`error`. Требует:
-  1. qemu-guest-agent в образе (есть во всех поддерживаемых);
-  2. **включённую команду `guest-exec` в гостевом агенте**. По умолчанию в некоторых
-     дистрибутивах/настройках Proxmox `guest-exec` заблокирован → `qm guest exec` вернёт
-     «Command guest-exec has been disabled». В этом случае отключите опцию или разрешите
-     `guest-exec` в конфиге гостевого агента (`/etc/qemu/qemu-ga.conf`, уберите `guest-exec`
-     из `blacklist`) и перезапустите `qemu-guest-agent`.
-  Параметры: `wait_for_cloud_init_retries` (60), `wait_for_cloud_init_delay` (5 с).
-  По умолчанию выключено — роль завершается сразу после `qm start`.
+
 
 ---
 
@@ -286,7 +277,6 @@ vars:
 | `Missing required variable(s)` (cloud_password/target_node) | Не задан пароль cloud-init или узел | Задайте `cloud_password` (непустой) и `target_node` |
 | `Template X has dependent VMs` | `recreate_templates: true` при наличии linked clones | Удалите/мигрируйте клоны или `recreate_templates: false` |
 | `~/.ssh/id_rsa.pub` not found | Файл ключа отсутствует на control node | Создайте ключ или переопределите `ssh_public_key` |
-| `Command guest-exec has been disabled` | `wait_for_cloud_init: true`, но guest-exec заблокирован в qemu-ga | Отключите `wait_for_cloud_init` или разрешите `guest-exec` в `/etc/qemu/qemu-ga.conf` |
 
 ---
 

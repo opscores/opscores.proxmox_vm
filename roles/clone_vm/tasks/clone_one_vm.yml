@@ -377,28 +377,6 @@
   retries: 3
   delay: 10
 
-# ============================================================
-# Optional: wait for cloud-init to complete
-# ============================================================
-- name: "Wait for cloud-init to complete (optional) for {{ new_vm_name }}"
-  ansible.builtin.command:
-    cmd: "qm guest exec {{ new_vm_id }} -- cloud-init status"
-  register: cv_cloud_init_poll
-  changed_when: false
-  failed_when: false
-  until: "'done' in (cv_cloud_init_poll.stdout | default('')) or 'error' in (cv_cloud_init_poll.stdout | default(''))"
-  retries: "{{ wait_for_cloud_init_retries | default(60) }}"
-  delay: "{{ wait_for_cloud_init_delay | default(5) }}"
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and (wait_for_cloud_init | default(false) | bool)
-
-- name: "Fail if cloud-init reported an error on {{ new_vm_name }}"
-  ansible.builtin.fail:
-    msg: "cloud-init reported an error on VM {{ new_vm_id }} ({{ new_vm_name }}): {{ cv_cloud_init_poll.stdout }}"
-  when:
-    - (cv_vm_config_exists.rc != 0 or recreate_vm | bool)
-    - (wait_for_cloud_init | default(false) | bool)
-    - "'error' in (cv_cloud_init_poll.stdout | default(''))"
-
 # Final output
 - name: "Final Output"
   ansible.builtin.debug:
