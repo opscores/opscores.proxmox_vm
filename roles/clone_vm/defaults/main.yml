@@ -33,6 +33,7 @@ recreate_vm: false
 
 use_dhcp_ip: true
 static_ip_address: ""
+static_ip_addresses: []   # per-VM static IPs for bulk clone (takes priority over static_ip_address when non-empty)
 static_subnet_mask: "24"
 static_gateway: ""
 

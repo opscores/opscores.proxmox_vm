@@ -83,17 +83,23 @@
       - source_vm_id is defined
       - os_type is defined
       - target_node is defined
+      - target_node | string | trim | length > 0
       - storage_pool is defined
       - full_clone is defined
       - cloud_user is defined
+      - cloud_user | string | trim | length > 0
       - cloud_password is defined
+      - cloud_password | string | trim | length > 0
       - ssh_public_key is defined
+      - ssh_public_key | string | trim | length > 0
       - new_vm_name is defined
+      - new_vm_name | string | trim | length > 0
       - (new_vm_id is defined) or (new_vm_ids | default([]) | length > 0)
     fail_msg: >
       Missing required variable(s). Required: source_vm_id, os_type, target_node, storage_pool,
-      full_clone, cloud_user, cloud_password, ssh_public_key, new_vm_name, and either new_vm_id
-      (base) or new_vm_ids (list).
+      full_clone, cloud_user (non-empty), cloud_password (non-empty), ssh_public_key (non-empty),
+      new_vm_name (non-empty), and either new_vm_id (base ID, required when new_vm_ids empty)
+      or new_vm_ids (non-empty explicit list).
       Current values: source_vm_id={{ source_vm_id | default('UNDEFINED') }},
       new_vm_id={{ new_vm_id | default('UNDEFINED') }},
       new_vm_name={{ new_vm_name | default('UNDEFINED') }},
@@ -159,6 +165,26 @@
     cv_vm_list: "{{ cv_vm_list_raw | from_yaml }}"
   changed_when: false
 
+# Validate vm_name_pattern contains an index placeholder when cloning more than one VM
+- name: "Validate vm_name_pattern contains {index} or {index_raw} when vm_count > 1"
+  ansible.builtin.assert:
+    that:
+      - (cv_vm_list | length <= 1) or (vm_name_pattern | default('') | length == 0) or ('{index}' in (vm_name_pattern | default(''))) or ('{index_raw}' in (vm_name_pattern | default('')))
+    fail_msg: >
+      vm_name_pattern must contain {index} or {index_raw} when cloning more than one VM,
+      otherwise all VMs would share the same name. Got: '{{ vm_name_pattern }}'
+  when: (cv_vm_list | length > 1)
+
+# Validate static_ip_addresses length matches VM count (when provided)
+- name: "Validate static_ip_addresses length matches VM count"
+  ansible.builtin.assert:
+    that:
+      - (static_ip_addresses | default([]) | length == 0) or (static_ip_addresses | default([]) | length == (cv_vm_list | length))
+    fail_msg: >
+      static_ip_addresses has {{ static_ip_addresses | default([]) | length }} entries
+      but {{ cv_vm_list | length }} VMs will be cloned. Provide one IP per VM or leave empty.
+  when: not (use_dhcp_ip | default(true) | bool)
+
 # Validate generated IDs are in Proxmox range
 - name: "Validate generated VM IDs are in Proxmox range"
   ansible.builtin.assert:
@@ -213,6 +239,8 @@
   loop: "{{ cv_vm_list }}"
   loop_control:
     loop_var: cv_vm
+    index_var: cv_vm_index
   vars:
     new_vm_id: "{{ cv_vm.id }}"
     new_vm_name: "{{ cv_vm.name }}"
+    cv_vm_index: "{{ cv_vm_index }}"

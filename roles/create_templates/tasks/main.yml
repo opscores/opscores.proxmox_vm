@@ -98,7 +98,7 @@
 
 - name: Create snippets directory if it doesn't exist
   ansible.builtin.file:
-    path: "{{ snippets_path }}"
+    path: "{{ snippets_path | regex_replace('/$','') }}"
     state: directory
     owner: root
     group: root
@@ -133,6 +133,32 @@
   until: ct_stop_result.rc == 0
   retries: 3
   delay: 10
+
+# Safety: refuse to destroy a template that has dependent VMs (linked clones).
+# Full clones are independent and won't be detected here; only linked clones
+# (which store 'parent: <template_id>' in their config) are caught.
+- name: "Abort recreate if template has dependent VMs (linked clones)"
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      dependents=""
+      for vid in $(qm list 2>/dev/null | awk 'NR>1 {print $1}'); do
+        if qm config "$vid" 2>/dev/null | grep -qE "parent:[[:space:]]*{{ item.vm_id }}([[:space:]]|$)"; then
+          dependents="$dependents $vid"
+        fi
+      done
+      if [ -n "$dependents" ]; then
+        echo "Template {{ item.vm_id }} ({{ item.name }}) has dependent VMs:$dependents" >&2
+        exit 1
+      fi
+      echo "no dependents"
+  loop: "{{ ct_active_templates }}"
+  when:
+    - item.recreate | bool
+    - ct_vm_existence[item.vm_id] == "exists"
+  register: ct_dependency_check
+  changed_when: false
+  failed_when: ct_dependency_check.rc != 0
 
 - name: Destroy existing VMs/Templates if they exist and recreate is true
   ansible.builtin.command:
