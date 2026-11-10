@@ -171,38 +171,6 @@
 # Disk
 # ============================================================
 
-# Auto-detect disk slot from source template (only when clone_vm_disk_slot is empty)
-- name: "Auto-detect disk slot from source template"
-  ansible.builtin.shell:
-    cmd: "set -o pipefail; qm config {{ source_vm_id }} | grep -E '^(scsi|sata|virtio|ide)[0-9]+:' | grep 'size=' | head -1 | cut -d: -f1"
-  register: cv_detected_disk_slot
-  changed_when: false
-  failed_when: false
-  when:
-    - (cv_vm_config_exists.rc != 0 or recreate_vm | bool)
-    - cv_should_resize_disk
-    - (clone_vm_disk_slot | default('') | trim | length == 0)
-
-- name: "Set clone_vm_disk_slot from auto-detection"
-  ansible.builtin.set_fact:
-    clone_vm_disk_slot: "{{ cv_detected_disk_slot.stdout | trim }}"
-  changed_when: false
-  when:
-    - (cv_vm_config_exists.rc != 0 or recreate_vm | bool)
-    - cv_should_resize_disk
-    - (clone_vm_disk_slot | default('') | trim | length == 0)
-    - (cv_detected_disk_slot.stdout | default('') | trim | length > 0)
-
-# Fallback to scsi0 if slot is still empty (detection failed or not run)
-- name: "Fallback clone_vm_disk_slot to scsi0"
-  ansible.builtin.set_fact:
-    clone_vm_disk_slot: "scsi0"
-  changed_when: false
-  when:
-    - (cv_vm_config_exists.rc != 0 or recreate_vm | bool)
-    - cv_should_resize_disk
-    - (clone_vm_disk_slot | default('') | trim | length == 0)
-
 # Get current disk size
 - name: "Get current disk size for VM disk slot {{ clone_vm_disk_slot }}"
   ansible.builtin.shell:
