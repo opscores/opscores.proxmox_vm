@@ -180,7 +180,7 @@ The role includes the following checks:
 - `clone_vm_agent`: Guest agent configuration for the cloned VM (overrides default)
 - `clone_vm_disk_size`: Disk size for the cloned VM (empty by default -> keeps template disk size)
 - `vm_resize_disk`: Whether to resize disk when cloning (default: true). Set to false to skip resizing even if `clone_vm_disk_size` is set
-- `clone_vm_disk_slot`: Disk slot to resize (default: scsi0). If left empty, the slot is auto-detected from the source template.
+- `clone_vm_disk_slot`: Disk slot to resize (default: empty → auto-detect from source template, fallback scsi0). Set explicitly (e.g. scsi1) to override.
 - `wait_for_cloud_init`: Wait for cloud-init to finish after VM start (default: false). Requires qemu-guest-agent in the image.
 - `wait_for_cloud_init_retries`: Polling retries (default: 60).
 - `wait_for_cloud_init_delay`: Delay between polls in seconds (default: 5).

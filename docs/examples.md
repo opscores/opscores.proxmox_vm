@@ -254,6 +254,61 @@ ansible-galaxy collection install git+https://github.com/username/ansible-collec
 > См. [docs/operations.md](docs/operations.md) для полного описания bulk-клонирования и
 > устранения неполадок.
 
+### 3.6. Bulk-клонирование со статическими IP
+
+```yaml
+---
+- name: Clone VMs with per-VM static IPs
+  hosts: proxmox
+  serial: 1
+  collections:
+    - opscores.proxmox_vm
+  vars:
+    source_vm_id: 3001
+    os_type: "almalinux"
+    vm_count: 3
+    new_vm_id: 8020
+    use_dhcp_ip: false
+    static_ip_addresses: ["192.168.1.101", "192.168.1.102", "192.168.1.103"]
+    static_subnet_mask: "24"
+    static_gateway: "192.168.1.1"
+    cloud_user: "ansible"
+    cloud_password: "{{ vault_cloud_password }}"
+    ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+  tasks:
+    - name: Clone VMs with static IPs
+      include_role:
+        name: clone_vm
+```
+
+### 3.7. Ожидание завершения cloud-init
+
+```yaml
+---
+- name: Clone VM and wait for cloud-init
+  hosts: proxmox
+  serial: 1
+  collections:
+    - opscores.proxmox_vm
+  vars:
+    source_vm_id: 3001
+    os_type: "almalinux"
+    new_vm_id: 8020
+    new_vm_name: "wait-test"
+    cloud_user: "ansible"
+    cloud_password: "{{ vault_cloud_password }}"
+    ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    wait_for_cloud_init: true
+    wait_for_cloud_init_retries: 60
+    wait_for_cloud_init_delay: 5
+  tasks:
+    - name: Clone VM and wait
+      include_role:
+        name: clone_vm
+```
+
+> Требует qemu-guest-agent в образе.
+
 ## Примеры команд запуска
 
 ```bash
