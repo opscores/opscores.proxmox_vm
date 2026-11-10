@@ -169,7 +169,10 @@
 - name: "Validate vm_name_pattern contains {index} or {index_raw} when vm_count > 1"
   ansible.builtin.assert:
     that:
-      - (cv_vm_list | length <= 1) or (vm_name_pattern | default('') | length == 0) or ('{index}' in (vm_name_pattern | default(''))) or ('{index_raw}' in (vm_name_pattern | default('')))
+      - >-
+        (cv_vm_list | length <= 1) or (vm_name_pattern | default('') | length == 0)
+        or ('{index}' in (vm_name_pattern | default('')))
+        or ('{index_raw}' in (vm_name_pattern | default('')))
     fail_msg: >
       vm_name_pattern must contain {index} or {index_raw} when cloning more than one VM,
       otherwise all VMs would share the same name. Got: '{{ vm_name_pattern }}'
@@ -243,4 +246,3 @@
   vars:
     new_vm_id: "{{ cv_vm.id }}"
     new_vm_name: "{{ cv_vm.name }}"
-    cv_vm_index: "{{ cv_vm_index }}"

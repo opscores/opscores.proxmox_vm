@@ -98,7 +98,7 @@
 
 - name: Create snippets directory if it doesn't exist
   ansible.builtin.file:
-    path: "{{ snippets_path | regex_replace('/$','') }}"
+    path: "{{ snippets_path | regex_replace('/$', '') }}"
     state: directory
     owner: root
     group: root
@@ -330,7 +330,7 @@
 #     guest's cloud-init growpart cannot expand root during first boot -> "No space left on device".
 #     Resizing the template disk UP here leaves headroom at the end of the disk; growpart then grows
 #     root to fill it. Only expands (never shrinks).
-- name: "Ensure imported disk of {{ item.name }} is at least {{ template_min_disk_size }}"
+- name: "Ensure imported disk minimum size for {{ item.name }}"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail; qm config {{ item.vm_id }} |
@@ -340,7 +340,10 @@
              if (unit=="G") mb=num*1024; else if (unit=="M") mb=num; else mb=int(num/1024);
              printf "%d", int(mb) }' |
       bash -c 'CUR=$(cat); DESIRED=$(( {{ (template_min_disk_size | regex_replace("[GMg]$", "") | int) * 1024 }} ));
-        if [ "${CUR}" = "" ] || [ "${DESIRED}" -gt "${CUR}" ]; then qm resize {{ item.vm_id }} {{ item.scsi_disk_slot }} {{ template_min_disk_size }}; echo RESIZED; fi'
+        if [ "${CUR}" = "" ] || [ "${DESIRED}" -gt "${CUR}" ]; then
+          qm resize {{ item.vm_id }} {{ item.scsi_disk_slot }} {{ template_min_disk_size }}
+          echo RESIZED
+        fi'
   register: ct_resize_result
   changed_when: "'RESIZED' in ct_resize_result.stdout"
   loop: "{{ ct_active_templates }}"

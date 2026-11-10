@@ -95,7 +95,7 @@
 # Clean up orphaned cloud-init snippet
 - name: "Clean up orphaned cloud-init snippet for recreated VM"
   ansible.builtin.file:
-    path: "{{ snippets_path | regex_replace('/$','') }}/ci-{{ new_vm_id }}.yaml"
+    path: "{{ snippets_path | regex_replace('/$', '') }}/ci-{{ new_vm_id }}.yaml"
     state: absent
   when: cv_vm_config_exists.rc == 0 and recreate_vm | bool
 
@@ -135,13 +135,17 @@
   ansible.builtin.command:
     cmd: >-
       qm set {{ new_vm_id }}
-      {% if clone_vm_memory is defined and clone_vm_memory != omit and (clone_vm_memory | string | trim | length) > 0 %}--memory {{ clone_vm_memory }}{% endif %}
+      {% if clone_vm_memory is defined and clone_vm_memory != omit and
+            (clone_vm_memory | string | trim | length) > 0 %}--memory {{ clone_vm_memory }}{% endif %}
       {% if clone_vm_cores is defined and clone_vm_cores != omit and (clone_vm_cores | string | trim | length) > 0 %}--cores {{ clone_vm_cores }}{% endif %}
-      {% if clone_vm_ostype is defined and clone_vm_ostype != omit and (clone_vm_ostype | string | trim | length) > 0 %}--ostype {{ clone_vm_ostype }}{% endif %}
-      {% if clone_vm_machine is defined and clone_vm_machine != omit and (clone_vm_machine | string | trim | length) > 0 %}--machine {{ clone_vm_machine }}{% endif %}
+      {% if clone_vm_ostype is defined and clone_vm_ostype != omit and
+            (clone_vm_ostype | string | trim | length) > 0 %}--ostype {{ clone_vm_ostype }}{% endif %}
+      {% if clone_vm_machine is defined and clone_vm_machine != omit and
+            (clone_vm_machine | string | trim | length) > 0 %}--machine {{ clone_vm_machine }}{% endif %}
       {% if clone_vm_bios is defined and clone_vm_bios != omit and (clone_vm_bios | string | trim | length) > 0 %}--bios {{ clone_vm_bios }}{% endif %}
       {% if clone_vm_cpu is defined and clone_vm_cpu != omit and (clone_vm_cpu | string | trim | length) > 0 %}--cpu {{ clone_vm_cpu }}{% endif %}
-      {% if clone_vm_scsihw is defined and clone_vm_scsihw != omit and (clone_vm_scsihw | string | trim | length) > 0 %}--scsihw {{ clone_vm_scsihw }}{% endif %}
+      {% if clone_vm_scsihw is defined and clone_vm_scsihw != omit and
+            (clone_vm_scsihw | string | trim | length) > 0 %}--scsihw {{ clone_vm_scsihw }}{% endif %}
       {% if clone_vm_agent is defined and clone_vm_agent != omit and (clone_vm_agent | string | trim | length) > 0 %}--agent {{ clone_vm_agent }}{% endif %}
   when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
   register: cv_config_result
@@ -155,23 +159,37 @@
 # Disk
 # ============================================================
 
-# Auto-detect disk slot from source template (overrides configured value if detection succeeds)
+# Auto-detect disk slot from source template (only when clone_vm_disk_slot is empty)
 - name: "Auto-detect disk slot from source template"
   ansible.builtin.shell:
     cmd: "set -o pipefail; qm config {{ source_vm_id }} | grep -E '^(scsi|sata|virtio|ide)[0-9]+:' | grep 'size=' | head -1 | cut -d: -f1"
   register: cv_detected_disk_slot
   changed_when: false
   failed_when: false
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and cv_should_resize_disk
+  when:
+    - (cv_vm_config_exists.rc != 0 or recreate_vm | bool)
+    - cv_should_resize_disk
+    - (clone_vm_disk_slot | default('') | trim | length == 0)
 
-- name: "Override clone_vm_disk_slot if auto-detection succeeded"
+- name: "Set clone_vm_disk_slot from auto-detection"
   ansible.builtin.set_fact:
     clone_vm_disk_slot: "{{ cv_detected_disk_slot.stdout | trim }}"
   changed_when: false
   when:
     - (cv_vm_config_exists.rc != 0 or recreate_vm | bool)
     - cv_should_resize_disk
+    - (clone_vm_disk_slot | default('') | trim | length == 0)
     - (cv_detected_disk_slot.stdout | default('') | trim | length > 0)
+
+# Fallback to scsi0 if slot is still empty (detection failed or not run)
+- name: "Fallback clone_vm_disk_slot to scsi0"
+  ansible.builtin.set_fact:
+    clone_vm_disk_slot: "scsi0"
+  changed_when: false
+  when:
+    - (cv_vm_config_exists.rc != 0 or recreate_vm | bool)
+    - cv_should_resize_disk
+    - (clone_vm_disk_slot | default('') | trim | length == 0)
 
 # Get current disk size
 - name: "Get current disk size for VM disk slot {{ clone_vm_disk_slot }}"
@@ -285,7 +303,7 @@
 - name: "Generate complete cloud-init user data from template"
   ansible.builtin.template:
     src: "templates/cloud-init-{{ os_type }}.yaml.j2"
-    dest: "{{ snippets_path | regex_replace('/$','') }}/ci-{{ new_vm_id }}.yaml"
+    dest: "{{ snippets_path | regex_replace('/$', '') }}/ci-{{ new_vm_id }}.yaml"
     mode: '0600'
   when: cv_vm_config_exists.rc != 0 or recreate_vm | bool
 
@@ -310,7 +328,11 @@
       qm set {{ new_vm_id }} --cicustom user={{ snippets_storage }}:snippets/ci-{{ new_vm_id }}.yaml
       --ipconfig0 'ip={{ cv_effective_static_ip }}/{{ static_subnet_mask }},gw={{ static_gateway }}'
       --nameserver '{{ dns_servers }}' --searchdomain '{{ search_domains }}' --ciupgrade 0
-  when: (cv_vm_config_exists.rc != 0 or recreate_vm | bool) and (not (use_dhcp_ip | default(true))) and (cv_effective_static_ip | default('') | trim | length > 0) and (static_gateway | default('') | trim | length > 0)
+  when:
+    - (cv_vm_config_exists.rc != 0 or recreate_vm | bool)
+    - (not (use_dhcp_ip | default(true)))
+    - (cv_effective_static_ip | default('') | trim | length > 0)
+    - (static_gateway | default('') | trim | length > 0)
   register: cv_set_static_result
   changed_when: "cv_set_static_result.stderr | length > 0"
   until: cv_set_static_result.rc == 0
@@ -346,7 +368,7 @@
 # ============================================================
 # Optional: wait for cloud-init to complete
 # ============================================================
-- name: "Wait for cloud-init to complete on {{ new_vm_name }} (optional)"
+- name: "Wait for cloud-init to complete (optional) for {{ new_vm_name }}"
   ansible.builtin.command:
     cmd: "qm guest exec {{ new_vm_id }} -- cloud-init status"
   register: cv_cloud_init_poll

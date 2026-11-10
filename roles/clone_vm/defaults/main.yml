@@ -11,7 +11,7 @@ search_domains: "local"
 
 vm_resize_disk: true
 clone_vm_disk_size: ""
-clone_vm_disk_slot: "scsi0"  # disk slot to resize (override if template uses another slot)
+clone_vm_disk_slot: ""  # disk slot to resize; empty = auto-detect from source template (fallback scsi0)
 
 # Bulk clone options (create N VMs from one template)
 vm_count: 1                          # number of VMs to clone (default 1 = backward compat)
