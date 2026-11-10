@@ -12,6 +12,12 @@ import_poll_interval_seconds: 15   # Polling interval when waiting for async tas
 cleanup_downloaded_images: true    # Cleanup /tmp after successful template creation
 recreate_templates: false
 
+# Minimum disk size for created templates (e.g. "10G"). Imported cloud images often ship a
+# tiny root partition with no free space after it, so the guest's cloud-init growpart/resize-rootfs
+# cannot expand the root filesystem during first boot -> "No space left on device". Resizing the
+# template disk UP here leaves headroom at the end of the disk; growpart then grows root to fill it.
+template_min_disk_size: "12G"
+
 vm_defaults:
   memory: 1024
   cores: 1

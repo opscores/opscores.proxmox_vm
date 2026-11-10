@@ -25,6 +25,7 @@
       vm_cores: "{{ item.value.cores | default(vm_defaults.cores) }}"
       vm_network_bridge: "{{ item.value.network_bridge | default(vm_defaults.network_bridge) }}"
       scsihw: "{{ item.value.scsihw | default(vm_defaults.scsihw) }}"
+      scsi_disk_slot: "{{ item.value.scsi_disk_slot | default('scsi0') }}"
       agent: "{{ item.value.agent | default(vm_defaults.agent) }}"
       enabled: true
       recreate: "{{ item.value.recreate | default(recreate_templates) }}"
@@ -284,6 +285,26 @@
   until: ct_set_disk_result.rc == 0
   retries: 3
   delay: 10
+
+# 1b. Ensure template disk has enough headroom for growpart/resize-rootfs.
+#     Imported cloud images often ship a tiny root partition with no free space after it, so the
+#     guest's cloud-init growpart cannot expand root during first boot -> "No space left on device".
+#     Resizing the template disk UP here leaves headroom at the end of the disk; growpart then grows
+#     root to fill it. Only expands (never shrinks).
+- name: "Ensure imported disk of {{ item.name }} is at least {{ template_min_disk_size }}"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail; qm config {{ item.vm_id }} |
+      grep -E '{{ item.scsi_disk_slot }}.*size=' | head -1 |
+      awk '{ match($0, /size=[^,]*/); v=substr($0, RSTART+5, RLENGTH-5);
+             gsub(/[^0-9GMg]/, "", v); num=v; unit=toupper(substr(v, length(v), 1));
+             if (unit=="G") mb=num*1024; else if (unit=="M") mb=num; else mb=int(num/1024);
+             printf "%d", int(mb) }' |
+      bash -c 'CUR=$(cat); DESIRED=$(( {{ (template_min_disk_size | regex_replace("[GMg]$", "") | int) * 1024 }} ));
+        if [ "${CUR}" = "" ] || [ "${DESIRED}" -gt "${CUR}" ]; then qm resize {{ item.vm_id }} {{ item.scsi_disk_slot }} {{ template_min_disk_size }}; echo RESIZED; fi'
+  register: ct_resize_result
+  changed_when: "'RESIZED' in ct_resize_result.stdout"
+  loop: "{{ ct_active_templates }}"
 
 # 2. Attach cloud-init CD-ROM
 - name: Add cloud-init drive
