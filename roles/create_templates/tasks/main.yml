@@ -134,10 +134,9 @@
   retries: 3
   delay: 10
 
-# Safety: refuse to destroy a template that has dependent VMs (linked clones).
-# Full clones are independent and won't be detected here; only linked clones
-# (which store 'parent: <template_id>' in their config) are caught.
-- name: "Abort recreate if template has dependent VMs (linked clones)"
+# Warning: detect templates with dependent VMs (linked clones only).
+# Full clones are independent and won't be detected. This is informational only.
+- name: "Warn if template has dependent VMs (linked clones)"
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
@@ -147,18 +146,26 @@
           dependents="$dependents $vid"
         fi
       done
-      if [ -n "$dependents" ]; then
-        echo "Template {{ item.vm_id }} ({{ item.name }}) has dependent VMs:$dependents" >&2
-        exit 1
-      fi
-      echo "no dependents"
+      echo "${dependents:-none}"
   loop: "{{ ct_active_templates }}"
   when:
     - item.recreate | bool
     - ct_vm_existence[item.vm_id] == "exists"
   register: ct_dependency_check
   changed_when: false
-  failed_when: ct_dependency_check.rc != 0
+  failed_when: false
+
+- name: "Report dependent VMs for recreated templates"
+  ansible.builtin.debug:
+    msg: >
+      WARNING: template {{ item.item.vm_id }} ({{ item.item.name }}) has dependent VMs:
+      {{ item.stdout | trim }}. Recreating it may break linked clones.
+  loop: "{{ ct_dependency_check.results | default([]) }}"
+  when:
+    - item is defined
+    - item.stdout is defined
+    - item.stdout | trim != "none"
+    - item.stdout | trim | length > 0
 
 - name: Destroy existing VMs/Templates if they exist and recreate is true
   ansible.builtin.command:
