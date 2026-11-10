@@ -120,6 +120,18 @@ Sensitive variables (`vault_proxmox_password`, `vault_ansible_user`, `vault_clou
 
 This role creates VM templates from cloud images. It supports Ubuntu, AlmaLinux, Fedora, and any additional OS you add.
 
+#### Supported operating systems
+
+| os_type | Template ID | Template name | Cloud image |
+|---|---|---|---|
+| `ubuntu24` | 3000 | ubuntu-24-04-template | Ubuntu 24.04 (noble) cloud image |
+| `ubuntu26` | 3004 | ubuntu-26-04-template | Ubuntu 26.04 (resolute) cloud image |
+| `almalinux` | 3001 | almalinux-9.8-template | AlmaLinux 9.8 GenericCloud |
+| `fedora` | 3002 | fedora-45-template | Fedora 45 Cloud Base |
+
+Template IDs and image URLs are defined in `roles/create_templates/defaults/main.yml` (`os_templates`).
+Image URLs point at the Yandex mirror (`mirror.yandex.ru`) and must be updated as releases age.
+
 #### Variables
 
 **Global settings:**

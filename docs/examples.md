@@ -1,5 +1,8 @@
 # Пример использования коллекции Proxmox VM
 
+**См. также:** [`README.md`](../README.md), [`operations.md`](operations.md)
+(предварительные требования и troubleshooting), [`overrides.md`](overrides.md).
+
 ## Установка коллекции
 
 ```bash

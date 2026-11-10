@@ -1,0 +1,14 @@
+# Sample ansible.cfg for opscores.proxmox_vm
+# Copy to your working directory (next to inventory.yml) and adjust.
+
+[defaults]
+host_key_checking = False
+retry_files_enabled = False
+inventory = inventory.yml
+roles_path = ./opscores.proxmox_vm/roles
+vault_password_file = ~/.vault_pass   # optional; otherwise use --ask-vault-pass
+forks = 10
+timeout = 30
+
+# Recommended: keep serial: 1 (roles set it themselves for clone/template ops)
+# serial = 1

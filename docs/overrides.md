@@ -1,5 +1,8 @@
 # Переопределение параметров
 
+**См. также:** [`README.md`](../README.md), [`operations.md`](operations.md),
+[`examples.md`](examples.md).
+
 ## Переопределение через inventory
 
 Ansible поддерживает глубокое слияние словарей (deep merge). Определите `os_templates` в `group_vars` или `host_vars` для переопределения параметров конкретных ОС.
@@ -106,6 +109,19 @@ os_templates:
     recreate: false
     cleanup_image: false
 ```
+
+## Различия cloud-init по ОС
+
+Поддерживаемые ОС различаются по группам пользователя, пакетному менеджеру и сервисам:
+
+| ОС | Группы | Пакетный менеджер | Особенности |
+|---|---|---|---|
+| Ubuntu 24/26 | `adm,audio,cdrom,dialout,plugdev,sudo,video` | apt + snap | certbot через snap, firewalld не используется |
+| AlmaLinux 9.8 | `wheel,adm,systemd-journal` | dnf | firewalld включён, EPEL |
+| Fedora 45 | `wheel,adm,systemd-journal` | dnf | firewalld включён |
+
+При добавлении новой ОС учитывайте эти различия в cloud-init шаблоне
+(`clone_vm/templates/cloud-init-<os>.yaml.j2`).
 
 ## Добавление новой ОС
 
